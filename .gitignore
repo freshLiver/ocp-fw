@@ -1,0 +1,9 @@
+# documentation configs
+# Doxyfile
+docs/
+
+# workspace configs
+.vscode/
+
+# coding style
+.clang-format
