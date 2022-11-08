@@ -48,155 +48,159 @@
 
 #include "nvme/nvme.h"
 
-#define REQ_TYPE_SLICE			0x0
-#define REQ_TYPE_NAND			0x1	// flash or flash DMA operation
-#define REQ_TYPE_NVME_DMA		0x2	// host DMA
+#define REQ_TYPE_SLICE    0x0
+#define REQ_TYPE_NAND     0x1 // flash or flash DMA operation
+#define REQ_TYPE_NVME_DMA 0x2 // host DMA
 
-#define REQ_QUEUE_TYPE_NONE							0x0
-#define REQ_QUEUE_TYPE_FREE							0x1
-#define REQ_QUEUE_TYPE_SLICE						0x2
-#define REQ_QUEUE_TYPE_BLOCKED_BY_BUF_DEP			0x3
-#define REQ_QUEUE_TYPE_BLOCKED_BY_ROW_ADDR_DEP		0x4
-#define REQ_QUEUE_TYPE_NVME_DMA						0x5
-#define REQ_QUEUE_TYPE_NAND							0x6
+#define REQ_QUEUE_TYPE_NONE                    0x0
+#define REQ_QUEUE_TYPE_FREE                    0x1
+#define REQ_QUEUE_TYPE_SLICE                   0x2
+#define REQ_QUEUE_TYPE_BLOCKED_BY_BUF_DEP      0x3
+#define REQ_QUEUE_TYPE_BLOCKED_BY_ROW_ADDR_DEP 0x4
+#define REQ_QUEUE_TYPE_NVME_DMA                0x5
+#define REQ_QUEUE_TYPE_NAND                    0x6
 
-#define REQ_CODE_WRITE				0x00
-#define REQ_CODE_READ				0x08
-#define REQ_CODE_READ_TRANSFER		0x09
-#define REQ_CODE_ERASE				0x0C
-#define REQ_CODE_RESET				0x0D
-#define REQ_CODE_SET_FEATURE		0x0E
-#define REQ_CODE_FLUSH				0x0F
-#define REQ_CODE_RxDMA				0x10
-#define REQ_CODE_TxDMA				0x20
+#define REQ_CODE_WRITE         0x00
+#define REQ_CODE_READ          0x08
+#define REQ_CODE_READ_TRANSFER 0x09
+#define REQ_CODE_ERASE         0x0C
+#define REQ_CODE_RESET         0x0D
+#define REQ_CODE_SET_FEATURE   0x0E
+#define REQ_CODE_FLUSH         0x0F
+#define REQ_CODE_RxDMA         0x10
+#define REQ_CODE_TxDMA         0x20
 
-#define REQ_CODE_OCSSD_PHY_TYPE_BASE	0xA0
-#define REQ_CODE_OCSSD_PHY_WRITE		0xA0
-#define REQ_CODE_OCSSD_PHY_READ			0xA8
-#define REQ_CODE_OCSSD_PHY_ERASE		0xAC
+#define REQ_CODE_OCSSD_PHY_TYPE_BASE 0xA0
+#define REQ_CODE_OCSSD_PHY_WRITE     0xA0
+#define REQ_CODE_OCSSD_PHY_READ      0xA8
+#define REQ_CODE_OCSSD_PHY_ERASE     0xAC
 
 /**
- * These DATA_BUF_XXX will be used for checking whether the 
- * 
- * - REQ_OPT_DATA_BUF_ENTRY: 
- * 
+ * These DATA_BUF_XXX will be used for checking whether the
+ *
+ * - REQ_OPT_DATA_BUF_ENTRY:
+ *
  * 	This request needs a data buf entry, thus we have to allocate a space for it.
- * 
- * - REQ_OPT_DATA_BUF_TEMP_ENTRY: 
- * - REQ_OPT_DATA_BUF_ADDR: 
- * - REQ_OPT_DATA_BUF_NONE: 
- * 
+ *
+ * - REQ_OPT_DATA_BUF_TEMP_ENTRY:
+ * - REQ_OPT_DATA_BUF_ADDR:
+ * - REQ_OPT_DATA_BUF_NONE:
+ *
  */
 
-#define REQ_OPT_DATA_BUF_ENTRY		0
-#define REQ_OPT_DATA_BUF_TEMP_ENTRY	1  // FIXME: why tmp, GC?
-#define REQ_OPT_DATA_BUF_ADDR		2  // FIXME: only used in bad block related
-#define REQ_OPT_DATA_BUF_NONE		3
+#define REQ_OPT_DATA_BUF_ENTRY      0
+#define REQ_OPT_DATA_BUF_TEMP_ENTRY 1 // FIXME: why tmp, GC?
+#define REQ_OPT_DATA_BUF_ADDR       2 // FIXME: only used in bad block related
+#define REQ_OPT_DATA_BUF_NONE       3
 
-#define REQ_OPT_NAND_ADDR_VSA		0 	// VSA for Virtual Slice Address
-#define REQ_OPT_NAND_ADDR_PHY_ORG	1	// 
+#define REQ_OPT_NAND_ADDR_VSA     0 // VSA for Virtual Slice Address
+#define REQ_OPT_NAND_ADDR_PHY_ORG 1 //
 
-#define REQ_OPT_NAND_ECC_OFF		0
-#define REQ_OPT_NAND_ECC_ON			1
+#define REQ_OPT_NAND_ECC_OFF 0
+#define REQ_OPT_NAND_ECC_ON  1
 
-#define REQ_OPT_NAND_ECC_WARNING_OFF		0
-#define REQ_OPT_NAND_ECC_WARNING_ON			1
+#define REQ_OPT_NAND_ECC_WARNING_OFF 0
+#define REQ_OPT_NAND_ECC_WARNING_ON  1
 
-#define REQ_OPT_WRAPPING_NONE		0
-#define REQ_OPT_WRAPPING_REQ		1
+#define REQ_OPT_WRAPPING_NONE 0
+#define REQ_OPT_WRAPPING_REQ  1
 
 // no need to check dep for this request, may be used by information related operations.
-#define REQ_OPT_ROW_ADDR_DEPENDENCY_NONE	0
+#define REQ_OPT_ROW_ADDR_DEPENDENCY_NONE 0
 // we should check dep for this request, basically was used by NAND I/O operations.
-#define REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK 	1
+#define REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK 1
 
-#define REQ_OPT_BLOCK_SPACE_MAIN	0
-#define REQ_OPT_BLOCK_SPACE_TOTAL 	1
+#define REQ_OPT_BLOCK_SPACE_MAIN  0
+#define REQ_OPT_BLOCK_SPACE_TOTAL 1
 
-#define LOGICAL_SLICE_ADDR_NONE 	0xffffffff
-
+#define LOGICAL_SLICE_ADDR_NONE 0xffffffff
 
 /**
  * The main structure used when allocating data buffer.
- * 
- * 
+ *
+ *
  */
-typedef struct _DATA_BUF_INFO{
-	union {
-		unsigned int addr;
-		unsigned int entry;
-	};
+typedef struct _DATA_BUF_INFO
+{
+    union
+    {
+        unsigned int addr;
+        unsigned int entry;
+    };
 } DATA_BUF_INFO, *P_DATA_BUF_INFO;
 
-
-typedef struct _NVME_DMA_INFO{
-	unsigned int startIndex : 16;
-	unsigned int nvmeBlockOffset : 16;
-	unsigned int numOfNvmeBlock : 16;
-	unsigned int reqTail	: 8;
-	unsigned int reserved0 : 8;
-	unsigned int overFlowCnt;
+typedef struct _NVME_DMA_INFO
+{
+    unsigned int startIndex : 16;
+    unsigned int nvmeBlockOffset : 16;
+    unsigned int numOfNvmeBlock : 16;
+    unsigned int reqTail : 8;
+    unsigned int reserved0 : 8;
+    unsigned int overFlowCnt;
 } NVME_DMA_INFO, *P_NVME_DMA_INFO;
 
-
-typedef struct _NAND_INFO{
-	union {
-		unsigned int virtualSliceAddr;
-		struct {
-			unsigned int physicalCh : 4;
-			unsigned int physicalWay : 4;
-			unsigned int physicalBlock : 16;
-			unsigned int phyReserved0 : 8;
-		};
-	};
-	union {
-		unsigned int programmedPageCnt;
-		struct {
-			unsigned int physicalPage : 16;
-			unsigned int phyReserved1 : 16;
-		};
-	};
+typedef struct _NAND_INFO
+{
+    union
+    {
+        unsigned int virtualSliceAddr;
+        struct
+        {
+            unsigned int physicalCh : 4;
+            unsigned int physicalWay : 4;
+            unsigned int physicalBlock : 16;
+            unsigned int phyReserved0 : 8;
+        };
+    };
+    union
+    {
+        unsigned int programmedPageCnt;
+        struct
+        {
+            unsigned int physicalPage : 16;
+            unsigned int phyReserved1 : 16;
+        };
+    };
 } NAND_INFO, *P_NAND_INFO;
 
-
-typedef struct _REQ_OPTION{
-	unsigned int dataBufFormat : 2;
-	unsigned int nandAddr : 2;
-	unsigned int nandEcc : 1;
-	unsigned int nandEccWarning : 1;
-	unsigned int rowAddrDependencyCheck : 1;
-	unsigned int blockSpace : 1;
-	unsigned int reserved0 : 24;
+typedef struct _REQ_OPTION
+{
+    unsigned int dataBufFormat : 2;
+    unsigned int nandAddr : 2;
+    unsigned int nandEcc : 1;
+    unsigned int nandEccWarning : 1;
+    unsigned int rowAddrDependencyCheck : 1;
+    unsigned int blockSpace : 1;
+    unsigned int reserved0 : 24;
 } REQ_OPTION, *P_REQ_OPTION;
-
 
 /**
  * As described in the structure of Reservation Station, this structure is used for
  * distinguishing the type of requests:
- * 
+ *
  * - reqType: REQ_TYPE_NAND or REQ_TYPE_NVME_DMA
  * - reqQueueType
  * - reqCode
- * - 
+ * -
  */
 typedef struct _SSD_REQ_FORMAT
 {
-	unsigned int reqType : 4;
-	unsigned int reqQueueType : 4;
-	unsigned int reqCode : 8;
-	unsigned int nvmeCmdSlotTag : 16;
+    unsigned int reqType : 4;
+    unsigned int reqQueueType : 4;
+    unsigned int reqCode : 8;
+    unsigned int nvmeCmdSlotTag : 16;
 
-	unsigned int logicalSliceAddr;
+    unsigned int logicalSliceAddr;
 
-	REQ_OPTION reqOpt;
-	DATA_BUF_INFO dataBufInfo;
-	NVME_DMA_INFO nvmeDmaInfo;
-	NAND_INFO nandInfo;
+    REQ_OPTION reqOpt;
+    DATA_BUF_INFO dataBufInfo;
+    NVME_DMA_INFO nvmeDmaInfo;
+    NAND_INFO nandInfo;
 
-	unsigned int prevReq : 16;
-	unsigned int nextReq : 16;
-	unsigned int prevBlockingReq : 16;
-	unsigned int nextBlockingReq : 16;
+    unsigned int prevReq : 16;
+    unsigned int nextReq : 16;
+    unsigned int prevBlockingReq : 16;
+    unsigned int nextBlockingReq : 16;
 
 } SSD_REQ_FORMAT, *P_SSD_REQ_FORMAT;
 

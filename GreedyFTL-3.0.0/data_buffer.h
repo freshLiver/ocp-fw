@@ -43,72 +43,74 @@
 //   - First draft
 //////////////////////////////////////////////////////////////////////////////////
 
-
 #ifndef DATA_BUFFER_H_
 #define DATA_BUFFER_H_
 
 #include "ftl_config.h"
 
 // Each die 16 entries
-#define AVAILABLE_DATA_BUFFER_ENTRY_COUNT				(16 * USER_DIES)
-#define AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT		(USER_DIES)
+#define AVAILABLE_DATA_BUFFER_ENTRY_COUNT           (16 * USER_DIES)
+#define AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT (USER_DIES)
 
-#define DATA_BUF_NONE	0xffff
-#define DATA_BUF_FAIL	0xffff
-#define DATA_BUF_DIRTY	1	// the buffer entry is not clean
-#define DATA_BUF_CLEAN	0 	// the buffer entry is not dirty
+#define DATA_BUF_NONE  0xffff
+#define DATA_BUF_FAIL  0xffff
+#define DATA_BUF_DIRTY 1 // the buffer entry is not clean
+#define DATA_BUF_CLEAN 0 // the buffer entry is not dirty
 
 #define FindDataBufHashTableEntry(logicalSliceAddr) ((logicalSliceAddr) % AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
-
 
 /**
  * The structure of an entry of data buffer.
  */
-typedef struct _DATA_BUF_ENTRY {
-	unsigned int logicalSliceAddr;
-	unsigned int prevEntry : 16;		// the index of pref entry in the dataBuf
-	unsigned int nextEntry : 16;		// the index of next entry in the dataBuf
-	unsigned int blockingReqTail : 16;	// TODO
-	unsigned int hashPrevEntry : 16;	// the index of prev entry in the bucket
-	unsigned int hashNextEntry : 16;	// the index of next entry in the bucket
-	unsigned int dirty : 1;				// whether this entry is dirty or not (clean)
-	unsigned int reserved0 : 15;
+typedef struct _DATA_BUF_ENTRY
+{
+    unsigned int logicalSliceAddr;
+    unsigned int prevEntry : 16;       // the index of pref entry in the dataBuf
+    unsigned int nextEntry : 16;       // the index of next entry in the dataBuf
+    unsigned int blockingReqTail : 16; // TODO
+    unsigned int hashPrevEntry : 16;   // the index of prev entry in the bucket
+    unsigned int hashNextEntry : 16;   // the index of next entry in the bucket
+    unsigned int dirty : 1;            // whether this entry is dirty or not (clean)
+    unsigned int reserved0 : 15;
 } DATA_BUF_ENTRY, *P_DATA_BUF_ENTRY;
-
 
 /**
  * The main structure of fixed-size data buffer.
  * // TODO:
- * An 1D data buffer array with AVAILABLE_DATA_BUFFER_ENTRY_COUNT entries. When 
+ * An 1D data buffer array with AVAILABLE_DATA_BUFFER_ENTRY_COUNT entries. When
  */
-typedef struct _DATA_BUF_MAP{
-	/* Array of fixed-size data buffer entries. */
-	DATA_BUF_ENTRY dataBuf[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
+typedef struct _DATA_BUF_MAP
+{
+    /* Array of fixed-size data buffer entries. */
+    DATA_BUF_ENTRY dataBuf[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
 } DATA_BUF_MAP, *P_DATA_BUF_MAP;
 
-typedef struct _DATA_BUF_LRU_LIST {
-	unsigned int headEntry : 16;
-	unsigned int tailEntry : 16;
+typedef struct _DATA_BUF_LRU_LIST
+{
+    unsigned int headEntry : 16;
+    unsigned int tailEntry : 16;
 } DATA_BUF_LRU_LIST, *P_DATA_BUF_LRU_LIST;
 
-typedef struct _DATA_BUF_HASH_ENTRY{
-	unsigned int headEntry : 16;
-	unsigned int tailEntry : 16;
+typedef struct _DATA_BUF_HASH_ENTRY
+{
+    unsigned int headEntry : 16;
+    unsigned int tailEntry : 16;
 } DATA_BUF_HASH_ENTRY, *P_DATA_BUF_HASH_ENTRY;
 
-
-typedef struct _DATA_BUF_HASH_TABLE{
-	DATA_BUF_HASH_ENTRY dataBufHash[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
+typedef struct _DATA_BUF_HASH_TABLE
+{
+    DATA_BUF_HASH_ENTRY dataBufHash[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
 } DATA_BUF_HASH_TABLE, *P_DATA_BUF_HASH_TABLE;
 
-
-typedef struct _TEMPORARY_DATA_BUF_ENTRY {
-	unsigned int blockingReqTail : 16;
-	unsigned int reserved0 : 16;
+typedef struct _TEMPORARY_DATA_BUF_ENTRY
+{
+    unsigned int blockingReqTail : 16;
+    unsigned int reserved0 : 16;
 } TEMPORARY_DATA_BUF_ENTRY, *P_TEMPORARY_DATA_BUF_ENTRY;
 
-typedef struct _TEMPORARY_DATA_BUF_MAP{
-	TEMPORARY_DATA_BUF_ENTRY tempDataBuf[AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT];
+typedef struct _TEMPORARY_DATA_BUF_MAP
+{
+    TEMPORARY_DATA_BUF_ENTRY tempDataBuf[AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT];
 } TEMPORARY_DATA_BUF_MAP, *P_TEMPORARY_DATA_BUF_MAP;
 
 void InitDataBuf();

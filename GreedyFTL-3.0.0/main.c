@@ -58,8 +58,6 @@
 //   - First draft
 //////////////////////////////////////////////////////////////////////////////////
 
-
-
 #include "xil_cache.h"
 #include "xil_exception.h"
 #include "xil_mmu.h"
@@ -73,65 +71,59 @@
 #include "nvme/nvme_main.h"
 #include "nvme/host_lld.h"
 
-
 XScuGic GicInstance;
 
 int main()
 {
-	unsigned int u;
+    unsigned int u;
 
-	XScuGic_Config *IntcConfig;
+    XScuGic_Config *IntcConfig;
 
-	Xil_ICacheDisable();
-	Xil_DCacheDisable();
-	Xil_DisableMMU();
+    Xil_ICacheDisable();
+    Xil_DCacheDisable();
+    Xil_DisableMMU();
 
-	// Paging table set
-	#define MB (1024*1024)
-	for (u = 0; u < 4096; u++)
-	{
-		if (u < 0x2)
-			Xil_SetTlbAttributes(u * MB, 0xC1E); // cached & buffered
-		else if (u < 0x180)
-			Xil_SetTlbAttributes(u * MB, 0xC12); // uncached & nonbuffered
-		else if (u < 0x400)
-			Xil_SetTlbAttributes(u * MB, 0xC1E); // cached & buffered
-		else
-			Xil_SetTlbAttributes(u * MB, 0xC12); // uncached & nonbuffered
-	}
+// Paging table set
+#define MB (1024 * 1024)
+    for (u = 0; u < 4096; u++)
+    {
+        if (u < 0x2)
+            Xil_SetTlbAttributes(u * MB, 0xC1E); // cached & buffered
+        else if (u < 0x180)
+            Xil_SetTlbAttributes(u * MB, 0xC12); // uncached & nonbuffered
+        else if (u < 0x400)
+            Xil_SetTlbAttributes(u * MB, 0xC1E); // cached & buffered
+        else
+            Xil_SetTlbAttributes(u * MB, 0xC12); // uncached & nonbuffered
+    }
 
-	Xil_EnableMMU();
-	Xil_ICacheEnable();
-	Xil_DCacheEnable();
-	xil_printf("[!] MMU has been enabled.\r\n");
+    Xil_EnableMMU();
+    Xil_ICacheEnable();
+    Xil_DCacheEnable();
+    xil_printf("[!] MMU has been enabled.\r\n");
 
+    xil_printf("\r\n Hello COSMOS+ OpenSSD !!! \r\n");
 
-	xil_printf("\r\n Hello COSMOS+ OpenSSD !!! \r\n");
+    Xil_ExceptionInit();
 
+    IntcConfig = XScuGic_LookupConfig(XPAR_SCUGIC_SINGLE_DEVICE_ID);
+    XScuGic_CfgInitialize(&GicInstance, IntcConfig, IntcConfig->CpuBaseAddress);
+    Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_INT, (Xil_ExceptionHandler)XScuGic_InterruptHandler,
+                                 &GicInstance);
 
-	Xil_ExceptionInit();
+    XScuGic_Connect(&GicInstance, 61, (Xil_ExceptionHandler)dev_irq_handler, (void *)0);
 
-	IntcConfig = XScuGic_LookupConfig(XPAR_SCUGIC_SINGLE_DEVICE_ID);
-	XScuGic_CfgInitialize(&GicInstance, IntcConfig, IntcConfig->CpuBaseAddress);
-	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_INT,
-								(Xil_ExceptionHandler)XScuGic_InterruptHandler,
-								&GicInstance);
+    XScuGic_Enable(&GicInstance, 61);
 
-	XScuGic_Connect(&GicInstance, 61,
-					(Xil_ExceptionHandler)dev_irq_handler,
-					(void *)0);
+    // Enable interrupts in the Processor.
+    Xil_ExceptionEnableMask(XIL_EXCEPTION_IRQ);
+    Xil_ExceptionEnable();
 
-	XScuGic_Enable(&GicInstance, 61);
+    dev_irq_init();
 
-	// Enable interrupts in the Processor.
-	Xil_ExceptionEnableMask(XIL_EXCEPTION_IRQ);
-	Xil_ExceptionEnable();
+    nvme_main();
 
-	dev_irq_init();
+    xil_printf("done\r\n");
 
-	nvme_main();
-
-	xil_printf("done\r\n");
-
-	return 0;
+    return 0;
 }

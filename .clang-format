@@ -1,0 +1,13 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 115
+---
+Language: Cpp
+AlignTrailingComments: true
+AlignEscapedNewlines: Right
+AlignConsecutiveAssignments: true
+AlignConsecutiveMacros: true
+SortIncludes: false
+BreakBeforeBraces: Allman
+

@@ -57,58 +57,61 @@
 #ifndef FMC_DRIVER_H_
 #define FMC_DRIVER_H_
 
-#define V2FCommand_NOP 0
-#define V2FCommand_Reset 1
-#define V2FCommand_SetFeatures 6
-#define V2FCommand_GetFeatures 46
-#define V2FCommand_ReadPageTrigger 13		///< Read data from nand to die register
-#define V2FCommand_ReadPageTransfer 18		///< Read data from die register to buffer
-#define V2FCommand_ProgramPage 28			///< Recv data from buffer and program to page
-#define V2FCommand_BlockErase 37			///< Erase a flash block
-#define V2FCommand_StatusCheck 41			///< Check the exec result of previous command
+#define V2FCommand_NOP                 0
+#define V2FCommand_Reset               1
+#define V2FCommand_SetFeatures         6
+#define V2FCommand_GetFeatures         46
+#define V2FCommand_ReadPageTrigger     13 ///< Read data from nand to die register
+#define V2FCommand_ReadPageTransfer    18 ///< Read data from die register to buffer
+#define V2FCommand_ProgramPage         28 ///< Recv data from buffer and program to page
+#define V2FCommand_BlockErase          37 ///< Erase a flash block
+#define V2FCommand_StatusCheck         41 ///< Check the exec result of previous command
 #define V2FCommand_ReadPageTransferRaw 55
 
+#define V2FCrcValid(errorInformation)             !!((errorInformation) & (0x10000000))
+#define V2FSpareChunkValid(errorInformation)      !!((errorInformation) & (0x01000000))
+#define V2FPageChunkValid(errorInformation)       ((errorInformation) == 0xffffffff)
+#define V2FWorstChunkErrorCount(errorInformation) (((errorInformation)&0x00ff0000) >> 16)
 
-#define V2FCrcValid(errorInformation) !!((errorInformation) & (0x10000000))
-#define V2FSpareChunkValid(errorInformation) !!((errorInformation) & (0x01000000))
-#define V2FPageChunkValid(errorInformation) ((errorInformation) == 0xffffffff)
-#define V2FWorstChunkErrorCount(errorInformation) (((errorInformation) & 0x00ff0000) >> 16)
+#define V2FEnterToggleMode(dev, way, payLoadAddr)                                                                 \
+    V2FSetFeaturesSync(dev, way, 0x00000006, 0x00000008, 0x00000020, payLoadAddr)
 
-#define V2FEnterToggleMode(dev, way, payLoadAddr) V2FSetFeaturesSync(dev, way, 0x00000006, 0x00000008, 0x00000020, payLoadAddr)
-
-#define V2FWayReady(readyBusy, wayNo) (((readyBusy) >> (wayNo)) & 1)
-#define V2FTransferComplete(completeFlag) ((completeFlag) & 1)
-#define V2FRequestReportDone(statusReport) ((statusReport) & 1)
+#define V2FWayReady(readyBusy, wayNo)            (((readyBusy) >> (wayNo)) & 1)
+#define V2FTransferComplete(completeFlag)        ((completeFlag)&1)
+#define V2FRequestReportDone(statusReport)       ((statusReport)&1)
 #define V2FEliminateReportDoneFlag(statusReport) ((statusReport) >> 1)
-#define V2FRequestComplete(statusReport) (((statusReport) & 0x60) == 0x60)
-#define V2FRequestFail(statusReport) ((statusReport) & 3)
+#define V2FRequestComplete(statusReport)         (((statusReport)&0x60) == 0x60)
+#define V2FRequestFail(statusReport)             ((statusReport)&3)
 
 typedef struct
 {
-	unsigned int cmdSelect;
-	unsigned int rowAddress;
-	unsigned int userData;
-	unsigned int dataAddress;
-	unsigned int spareAddress;
-	unsigned int errorCountAddress;
-	unsigned int completionAddress;
-	unsigned int waySelection;
-	unsigned int channelBusy;
-	unsigned int readyBusy;
+    unsigned int cmdSelect;
+    unsigned int rowAddress;
+    unsigned int userData;
+    unsigned int dataAddress;
+    unsigned int spareAddress;
+    unsigned int errorCountAddress;
+    unsigned int completionAddress;
+    unsigned int waySelection;
+    unsigned int channelBusy;
+    unsigned int readyBusy;
 } V2FMCRegisters;
 
-unsigned int V2FIsControllerBusy(V2FMCRegisters* dev);
-void V2FResetSync(V2FMCRegisters* dev, int way);
-void V2FSetFeaturesSync(V2FMCRegisters* dev, int way, unsigned int feature0x02, unsigned int feature0x10, unsigned int feature0x01, unsigned int payLoadAddr);
-void V2FGetFeaturesSync(V2FMCRegisters* dev, int way, unsigned int* feature0x01, unsigned int* feature0x02, unsigned int* feature0x10, unsigned int* feature0x30);
-void V2FReadPageTriggerAsync(V2FMCRegisters* dev, int way, unsigned int rowAddress);
-void V2FReadPageTransferAsync(V2FMCRegisters* dev, int way, void* pageDataBuffer, void* spareDataBuffer, unsigned int* errorInformation, unsigned int* completion, unsigned int rowAddress);
-void V2FReadPageTransferRawAsync(V2FMCRegisters* dev, int way, void* pageDataBuffer, unsigned int* completion);
-void V2FProgramPageAsync(V2FMCRegisters* dev, int way, unsigned int rowAddress, void* pageDataBuffer, void* spareDataBuffer);
-void V2FEraseBlockAsync(V2FMCRegisters* dev, int way, unsigned int rowAddress);
-void V2FStatusCheckAsync(V2FMCRegisters* dev, int way, unsigned int* statusReport);
-unsigned int V2FStatusCheckSync(V2FMCRegisters* dev, int way);
-unsigned int V2FReadyBusyAsync(V2FMCRegisters* dev);
-
+unsigned int V2FIsControllerBusy(V2FMCRegisters *dev);
+void V2FResetSync(V2FMCRegisters *dev, int way);
+void V2FSetFeaturesSync(V2FMCRegisters *dev, int way, unsigned int feature0x02, unsigned int feature0x10,
+                        unsigned int feature0x01, unsigned int payLoadAddr);
+void V2FGetFeaturesSync(V2FMCRegisters *dev, int way, unsigned int *feature0x01, unsigned int *feature0x02,
+                        unsigned int *feature0x10, unsigned int *feature0x30);
+void V2FReadPageTriggerAsync(V2FMCRegisters *dev, int way, unsigned int rowAddress);
+void V2FReadPageTransferAsync(V2FMCRegisters *dev, int way, void *pageDataBuffer, void *spareDataBuffer,
+                              unsigned int *errorInformation, unsigned int *completion, unsigned int rowAddress);
+void V2FReadPageTransferRawAsync(V2FMCRegisters *dev, int way, void *pageDataBuffer, unsigned int *completion);
+void V2FProgramPageAsync(V2FMCRegisters *dev, int way, unsigned int rowAddress, void *pageDataBuffer,
+                         void *spareDataBuffer);
+void V2FEraseBlockAsync(V2FMCRegisters *dev, int way, unsigned int rowAddress);
+void V2FStatusCheckAsync(V2FMCRegisters *dev, int way, unsigned int *statusReport);
+unsigned int V2FStatusCheckSync(V2FMCRegisters *dev, int way);
+unsigned int V2FReadyBusyAsync(V2FMCRegisters *dev);
 
 #endif /* FMC_DRIVER_H_ */

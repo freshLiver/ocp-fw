@@ -44,55 +44,56 @@
 //   - First draft
 //////////////////////////////////////////////////////////////////////////////////
 
-
 #ifndef REQUEST_SCHEDULE_H_
 #define REQUEST_SCHEDULE_H_
 
 #include "ftl_config.h"
 
-#define WAY_NONE 			0xF
+#define WAY_NONE 0xF
 
-#define LUN_0_BASE_ADDR		0x00000000
-#define LUN_1_BASE_ADDR		0x00200000
+#define LUN_0_BASE_ADDR 0x00000000
+#define LUN_1_BASE_ADDR 0x00200000
 
-#define PSEUDO_BAD_BLOCK_MARK	0
+#define PSEUDO_BAD_BLOCK_MARK 0
 
-#define RETRY_LIMIT				5	//retry the failed request to the extent that the limit number allows
+#define RETRY_LIMIT 5 // retry the failed request to the extent that the limit number allows
 
-#define DIE_STATE_IDLE			0
-#define DIE_STATE_EXE			1
+#define DIE_STATE_IDLE 0
+#define DIE_STATE_EXE  1
 
-#define REQ_STATUS_CHECK_OPT_NONE 				0
-#define REQ_STATUS_CHECK_OPT_CHECK				1
-#define REQ_STATUS_CHECK_OPT_REPORT 			2
-#define REQ_STATUS_CHECK_OPT_COMPLETION_FLAG 	3
+#define REQ_STATUS_CHECK_OPT_NONE            0
+#define REQ_STATUS_CHECK_OPT_CHECK           1
+#define REQ_STATUS_CHECK_OPT_REPORT          2
+#define REQ_STATUS_CHECK_OPT_COMPLETION_FLAG 3
 
-#define REQ_STATUS_RUNNING	0
-#define REQ_STATUS_DONE		1
-#define REQ_STATUS_FAIL		2
-#define REQ_STATUS_WARNING	3
+#define REQ_STATUS_RUNNING 0
+#define REQ_STATUS_DONE    1
+#define REQ_STATUS_FAIL    2
+#define REQ_STATUS_WARNING 3
 
-#define ERROR_INFO_FAIL		0
-#define ERROR_INFO_PASS		1
-#define ERROR_INFO_WARNING	2
+#define ERROR_INFO_FAIL    0
+#define ERROR_INFO_PASS    1
+#define ERROR_INFO_WARNING 2
 
-
-typedef struct _COMPLETE_FLAG_TABLE {
-	unsigned int completeFlag[USER_CHANNELS][USER_WAYS];
+typedef struct _COMPLETE_FLAG_TABLE
+{
+    unsigned int completeFlag[USER_CHANNELS][USER_WAYS];
 } COMPLETE_FLAG_TABLE, *P_COMPLETE_FLAG_TABLE;
 
-typedef struct _STATUS_REPORT_TABLE {
-	unsigned int statusReport[USER_CHANNELS][USER_WAYS];
+typedef struct _STATUS_REPORT_TABLE
+{
+    unsigned int statusReport[USER_CHANNELS][USER_WAYS];
 } STATUS_REPORT_TABLE, *P_STATUS_REPORT_TABLE;
 
-typedef struct _ERROR_INFO_TABLE {
-	unsigned int errorInfo[USER_CHANNELS][USER_WAYS][ERROR_INFO_WORD_COUNT];
+typedef struct _ERROR_INFO_TABLE
+{
+    unsigned int errorInfo[USER_CHANNELS][USER_WAYS][ERROR_INFO_WORD_COUNT];
 } ERROR_INFO_TABLE, *P_ERROR_INFO_TABLE;
 
-typedef struct _RETRY_LIMIT_TABLE {
-	int retryLimit[USER_CHANNELS][USER_WAYS];
+typedef struct _RETRY_LIMIT_TABLE
+{
+    int retryLimit[USER_CHANNELS][USER_WAYS];
 } RETRY_LIMIT_TABLE, *P_RETRY_LIMIT_TABLE;
-
 
 /**
  * like a node of doubly-linked list.
@@ -105,26 +106,26 @@ typedef struct _RETRY_LIMIT_TABLE {
  * - nextWay
  *
  * In the beginning, the dieState of each way was initialized to IDLE and all the ways of
- * this channel were connected in serial order. 
+ * this channel were connected in serial order.
  */
-typedef struct _DIE_STATE_ENTRY {
-	unsigned int dieState	:	8;
-	unsigned int reqStatusCheckOpt	:	4;
-	unsigned int prevWay	:	4;
-	unsigned int nextWay 	:	4;
-	unsigned int reserved	:	12;
+typedef struct _DIE_STATE_ENTRY
+{
+    unsigned int dieState : 8;
+    unsigned int reqStatusCheckOpt : 4;
+    unsigned int prevWay : 4;
+    unsigned int nextWay : 4;
+    unsigned int reserved : 12;
 } DIE_STATE_ENTRY, *P_DIE_STATE_ENTRY;
 
-
-typedef struct _DIE_STATE_TABLE {
+typedef struct _DIE_STATE_TABLE
+{
     /**
      * The status table of each way.
      *
      * This table is used for
      */
-	DIE_STATE_ENTRY dieState[USER_CHANNELS][USER_WAYS];
+    DIE_STATE_ENTRY dieState[USER_CHANNELS][USER_WAYS];
 } DIE_STATE_TABLE, *P_DIE_STATE_TABLE;
-
 
 /**
  * The priority table that manage the statuses of each way.
@@ -147,31 +148,32 @@ typedef struct _DIE_STATE_TABLE {
  * // FIXME: why this order
  * // TODO: use union
  */
-typedef struct _WAY_PRIORITY_ENTRY {
-	unsigned int idleHead :	4;
-	unsigned int idleTail :	4;
-	unsigned int statusReportHead	:	4;
-	unsigned int statusReportTail 	:	4;
-	unsigned int readTriggerHead	:	4;
-	unsigned int readTriggerTail	:	4;
-	unsigned int writeHead	:	4;
-	unsigned int writeTail	:	4;
-	unsigned int readTransferHead	:	4;
-	unsigned int readTransferTail	:	4;
-	unsigned int eraseHead	:	4;
-	unsigned int eraseTail	:	4;
-	unsigned int statusCheckHead	:	4;
-	unsigned int statusCheckTail	:	4;
-	unsigned int reserved : 8;
+typedef struct _WAY_PRIORITY_ENTRY
+{
+    unsigned int idleHead : 4;
+    unsigned int idleTail : 4;
+    unsigned int statusReportHead : 4;
+    unsigned int statusReportTail : 4;
+    unsigned int readTriggerHead : 4;
+    unsigned int readTriggerTail : 4;
+    unsigned int writeHead : 4;
+    unsigned int writeTail : 4;
+    unsigned int readTransferHead : 4;
+    unsigned int readTransferTail : 4;
+    unsigned int eraseHead : 4;
+    unsigned int eraseTail : 4;
+    unsigned int statusCheckHead : 4;
+    unsigned int statusCheckTail : 4;
+    unsigned int reserved : 8;
 } WAY_PRIORITY_ENTRY, *P_WAY_PRIORITY_ENTRY;
 
-typedef struct _WAY_PRIORITY_TABLE {
+typedef struct _WAY_PRIORITY_TABLE
+{
     /**
      * The status table of each channel.
      */
-	WAY_PRIORITY_ENTRY wayPriority[USER_CHANNELS];
+    WAY_PRIORITY_ENTRY wayPriority[USER_CHANNELS];
 } WAY_PRIORITY_TABLE, *P_WAY_PRIORITY_TABLE;
-
 
 void InitReqScheduler();
 
@@ -206,13 +208,11 @@ unsigned int CheckEccErrorInfo(unsigned int chNo, unsigned int wayNo);
 
 void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatus);
 
-
 extern P_COMPLETE_FLAG_TABLE completeFlagTablePtr;
 extern P_STATUS_REPORT_TABLE statusReportTablePtr;
 extern P_ERROR_INFO_TABLE eccErrorInfoTablePtr;
 extern P_RETRY_LIMIT_TABLE retryLimitTablePtr;
 extern P_DIE_STATE_TABLE dieStatusTablePtr;
 extern P_WAY_PRIORITY_TABLE wayPriorityTablePtr;
-
 
 #endif /* REQUEST_SCHEDULE_H_ */

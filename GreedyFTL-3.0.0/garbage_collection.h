@@ -43,19 +43,20 @@
 //   - First draft
 //////////////////////////////////////////////////////////////////////////////////
 
-
 #ifndef GARBAGE_COLLECTION_H_
 #define GARBAGE_COLLECTION_H_
 
 #include "ftl_config.h"
 
-typedef struct _GC_VICTIM_LIST_ENTRY {
-	unsigned int headBlock : 16;
-	unsigned int tailBlock : 16;
+typedef struct _GC_VICTIM_LIST_ENTRY
+{
+    unsigned int headBlock : 16;
+    unsigned int tailBlock : 16;
 } GC_VICTIM_LIST_ENTRY, *P_GC_VICTIM_LIST_ENTRY;
 
-typedef struct _GC_VICTIM_MAP {
-	GC_VICTIM_LIST_ENTRY gcVictimList[USER_DIES][SLICES_PER_BLOCK + 1];
+typedef struct _GC_VICTIM_MAP
+{
+    GC_VICTIM_LIST_ENTRY gcVictimList[USER_DIES][SLICES_PER_BLOCK + 1];
 } GC_VICTIM_MAP, *P_GC_VICTIM_MAP;
 
 void InitGcVictimMap();
