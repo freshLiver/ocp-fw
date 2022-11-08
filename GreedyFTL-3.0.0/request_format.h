@@ -49,8 +49,8 @@
 #include "nvme/nvme.h"
 
 #define REQ_TYPE_SLICE			0x0
-#define REQ_TYPE_NAND			0x1
-#define REQ_TYPE_NVME_DMA		0x2
+#define REQ_TYPE_NAND			0x1	// flash or flash DMA operation
+#define REQ_TYPE_NVME_DMA		0x2	// host DMA
 
 #define REQ_QUEUE_TYPE_NONE							0x0
 #define REQ_QUEUE_TYPE_FREE							0x1
@@ -75,14 +75,26 @@
 #define REQ_CODE_OCSSD_PHY_READ			0xA8
 #define REQ_CODE_OCSSD_PHY_ERASE		0xAC
 
+/**
+ * These DATA_BUF_XXX will be used for checking whether the 
+ * 
+ * - REQ_OPT_DATA_BUF_ENTRY: 
+ * 
+ * 	This request needs a data buf entry, thus we have to allocate a space for it.
+ * 
+ * - REQ_OPT_DATA_BUF_TEMP_ENTRY: 
+ * - REQ_OPT_DATA_BUF_ADDR: 
+ * - REQ_OPT_DATA_BUF_NONE: 
+ * 
+ */
 
 #define REQ_OPT_DATA_BUF_ENTRY		0
-#define REQ_OPT_DATA_BUF_TEMP_ENTRY	1
-#define REQ_OPT_DATA_BUF_ADDR		2
+#define REQ_OPT_DATA_BUF_TEMP_ENTRY	1  // FIXME: why tmp, GC?
+#define REQ_OPT_DATA_BUF_ADDR		2  // FIXME: only used in bad block related
 #define REQ_OPT_DATA_BUF_NONE		3
 
-#define REQ_OPT_NAND_ADDR_VSA		0
-#define REQ_OPT_NAND_ADDR_PHY_ORG	1
+#define REQ_OPT_NAND_ADDR_VSA		0 	// VSA for Virtual Slice Address
+#define REQ_OPT_NAND_ADDR_PHY_ORG	1	// 
 
 #define REQ_OPT_NAND_ECC_OFF		0
 #define REQ_OPT_NAND_ECC_ON			1
@@ -93,7 +105,9 @@
 #define REQ_OPT_WRAPPING_NONE		0
 #define REQ_OPT_WRAPPING_REQ		1
 
+// no need to check dep for this request, may be used by information related operations.
 #define REQ_OPT_ROW_ADDR_DEPENDENCY_NONE	0
+// we should check dep for this request, basically was used by NAND I/O operations.
 #define REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK 	1
 
 #define REQ_OPT_BLOCK_SPACE_MAIN	0
@@ -101,6 +115,12 @@
 
 #define LOGICAL_SLICE_ADDR_NONE 	0xffffffff
 
+
+/**
+ * The main structure used when allocating data buffer.
+ * 
+ * 
+ */
 typedef struct _DATA_BUF_INFO{
 	union {
 		unsigned int addr;
@@ -150,6 +170,15 @@ typedef struct _REQ_OPTION{
 } REQ_OPTION, *P_REQ_OPTION;
 
 
+/**
+ * As described in the structure of Reservation Station, this structure is used for
+ * distinguishing the type of requests:
+ * 
+ * - reqType: REQ_TYPE_NAND or REQ_TYPE_NVME_DMA
+ * - reqQueueType
+ * - reqCode
+ * - 
+ */
 typedef struct _SSD_REQ_FORMAT
 {
 	unsigned int reqType : 4;

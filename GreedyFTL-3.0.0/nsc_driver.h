@@ -61,11 +61,11 @@
 #define V2FCommand_Reset 1
 #define V2FCommand_SetFeatures 6
 #define V2FCommand_GetFeatures 46
-#define V2FCommand_ReadPageTrigger 13
-#define V2FCommand_ReadPageTransfer 18
-#define V2FCommand_ProgramPage 28
-#define V2FCommand_BlockErase 37
-#define V2FCommand_StatusCheck 41
+#define V2FCommand_ReadPageTrigger 13		///< Read data from nand to die register
+#define V2FCommand_ReadPageTransfer 18		///< Read data from die register to buffer
+#define V2FCommand_ProgramPage 28			///< Recv data from buffer and program to page
+#define V2FCommand_BlockErase 37			///< Erase a flash block
+#define V2FCommand_StatusCheck 41			///< Check the exec result of previous command
 #define V2FCommand_ReadPageTransferRaw 55
 
 

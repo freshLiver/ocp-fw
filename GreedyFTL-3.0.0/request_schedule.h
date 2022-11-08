@@ -93,6 +93,20 @@ typedef struct _RETRY_LIMIT_TABLE {
 	int retryLimit[USER_CHANNELS][USER_WAYS];
 } RETRY_LIMIT_TABLE, *P_RETRY_LIMIT_TABLE;
 
+
+/**
+ * like a node of doubly-linked list.
+ *
+ * Each entry consist of 4 members:
+ *
+ * - dieState
+ * - reqStatusCheckOpt
+ * - prevWay
+ * - nextWay
+ *
+ * In the beginning, the dieState of each way was initialized to IDLE and all the ways of
+ * this channel were connected in serial order. 
+ */
 typedef struct _DIE_STATE_ENTRY {
 	unsigned int dieState	:	8;
 	unsigned int reqStatusCheckOpt	:	4;
@@ -101,11 +115,38 @@ typedef struct _DIE_STATE_ENTRY {
 	unsigned int reserved	:	12;
 } DIE_STATE_ENTRY, *P_DIE_STATE_ENTRY;
 
+
 typedef struct _DIE_STATE_TABLE {
+    /**
+     * The status table of each way.
+     *
+     * This table is used for
+     */
 	DIE_STATE_ENTRY dieState[USER_CHANNELS][USER_WAYS];
 } DIE_STATE_TABLE, *P_DIE_STATE_TABLE;
 
 
+/**
+ * The priority table that manage the statuses of each way.
+ *
+ * This table manage several statuses:
+ *
+ * - idle
+ * - readTrigger
+ * - readTransfer
+ * - write
+ * - erase
+ * - statusReport
+ * - statusCheck
+ *
+ * Each status manage the serial number of head way and tail way,
+ *
+ * At the initialization stage, the idle list contains all ways in the channel and the
+ * other lists are empty.
+ *
+ * // FIXME: why this order
+ * // TODO: use union
+ */
 typedef struct _WAY_PRIORITY_ENTRY {
 	unsigned int idleHead :	4;
 	unsigned int idleTail :	4;
@@ -125,6 +166,9 @@ typedef struct _WAY_PRIORITY_ENTRY {
 } WAY_PRIORITY_ENTRY, *P_WAY_PRIORITY_ENTRY;
 
 typedef struct _WAY_PRIORITY_TABLE {
+    /**
+     * The status table of each channel.
+     */
 	WAY_PRIORITY_ENTRY wayPriority[USER_CHANNELS];
 } WAY_PRIORITY_TABLE, *P_WAY_PRIORITY_TABLE;
 

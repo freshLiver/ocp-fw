@@ -49,29 +49,40 @@
 
 #include "ftl_config.h"
 
+// Each die 16 entries
 #define AVAILABLE_DATA_BUFFER_ENTRY_COUNT				(16 * USER_DIES)
 #define AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT		(USER_DIES)
 
 #define DATA_BUF_NONE	0xffff
 #define DATA_BUF_FAIL	0xffff
-#define DATA_BUF_DIRTY	1
-#define DATA_BUF_CLEAN	0
+#define DATA_BUF_DIRTY	1	// the buffer entry is not clean
+#define DATA_BUF_CLEAN	0 	// the buffer entry is not dirty
 
 #define FindDataBufHashTableEntry(logicalSliceAddr) ((logicalSliceAddr) % AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
 
 
+/**
+ * The structure of an entry of data buffer.
+ */
 typedef struct _DATA_BUF_ENTRY {
 	unsigned int logicalSliceAddr;
-	unsigned int prevEntry : 16;
-	unsigned int nextEntry : 16;
-	unsigned int blockingReqTail : 16;
-	unsigned int hashPrevEntry : 16;
-	unsigned int hashNextEntry : 16;
-	unsigned int dirty : 1;
+	unsigned int prevEntry : 16;		// the index of pref entry in the dataBuf
+	unsigned int nextEntry : 16;		// the index of next entry in the dataBuf
+	unsigned int blockingReqTail : 16;	// TODO
+	unsigned int hashPrevEntry : 16;	// the index of prev entry in the bucket
+	unsigned int hashNextEntry : 16;	// the index of next entry in the bucket
+	unsigned int dirty : 1;				// whether this entry is dirty or not (clean)
 	unsigned int reserved0 : 15;
 } DATA_BUF_ENTRY, *P_DATA_BUF_ENTRY;
 
+
+/**
+ * The main structure of fixed-size data buffer.
+ * // TODO:
+ * An 1D data buffer array with AVAILABLE_DATA_BUFFER_ENTRY_COUNT entries. When 
+ */
 typedef struct _DATA_BUF_MAP{
+	/* Array of fixed-size data buffer entries. */
 	DATA_BUF_ENTRY dataBuf[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
 } DATA_BUF_MAP, *P_DATA_BUF_MAP;
 

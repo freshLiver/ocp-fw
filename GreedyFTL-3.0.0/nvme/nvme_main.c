@@ -81,6 +81,14 @@ void nvme_main()
 	xil_printf("\r\nFTL reset complete!!! \r\n");
 	xil_printf("Turn on the host PC \r\n");
 
+    /**
+     * The main loop of Cosmos+ firmware.
+     *
+     * This loop can be separated into several small parts:
+     * 
+     * - NVMe Manager
+     * - Low-level Scheduler
+     */
 	while(1)
 	{
 		exeLlr = 1;
@@ -104,6 +112,19 @@ void nvme_main()
 
 			cmdValid = get_nvme_cmd(&nvmeCmd.qID, &nvmeCmd.cmdSlotTag, &nvmeCmd.cmdSeqNum, nvmeCmd.cmdDword);
 
+            /**
+             *  Interpret NVMe commands received from host.
+             *
+             *  In this step, we need to check which type of the NVMe command you got:
+             *
+             * - If it's Admin command:
+             *
+             * 		Handle it in NVMe Manager without forwarding to FTL.
+             *
+             * .- If it's I/O (NVM) command:
+             *
+             * 		Forward to the NVM Command Manager (FTL).
+             */
 			if(cmdValid == 1)
 			{
 				if(nvmeCmd.qID == 0)
@@ -174,6 +195,15 @@ void nvme_main()
 			xil_printf("\r\nNVMe reset!!!\r\n");
 		}
 
+        /**
+         * Do scheduling.
+         *
+         * We need to execute the requests that were put on corresponding queue in prev
+         * part.
+         * 
+         * As described in the paper, Host DMA operations have the highest priority, so
+         * we should call the `CheckDoneNvmeDmaReq` first, then `SchedulingNandReq`.
+         */
 		if(exeLlr && ((nvmeDmaReqQ.headReq != REQ_SLOT_TAG_NONE) || notCompletedNandReqCnt || blockedReqCnt))
 		{
 			CheckDoneNvmeDmaReq();

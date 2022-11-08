@@ -54,6 +54,38 @@ DATA_BUF_LRU_LIST dataBufLruList;
 P_DATA_BUF_HASH_TABLE dataBufHashTablePtr;
 P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 
+/**
+ * @brief Initialization process of the Data buffer.
+ * 
+ * Three buffer related lists will be initialized in this function
+ * 
+ * There are `16 x NUM_DIES` entries in the `dataBuf`, and all the elements of `dataBuf`
+ * will be initialized to:
+ * 
+ * - logicalSliceAddr points to LSA_NONE (0xffffffff)
+ * - prevEntry points to prev element of the `dataBuf` array (except for head)
+ * - nextEntry points to next element of the `dataBuf` array (except for tail)
+ * - nextEntry points to next element of the `dataBuf` array (except for tail)
+ * - nextEntry points to next element of the `dataBuf` array (except for tail)
+ * - hashPrevEntry points to DATA_BUF_NONE, because it doesn't belongs to any bucket yet
+ * - hashNextEntry points to DATA_BUF_NONE, because it doesn't belongs to any bucket yet
+ * - dirty flag is not set
+ * - blockingReqTail: REQ_SLOT_TAG_NONE //TODO
+ * 
+ * There are `16 x NUM_DIES` entries in the `dataBufHashTable`, and all the elements will
+ * be initialized to empty bucket, so:
+ * 	
+ * - headEntry and tailEntry both point to DATA_BUF_NONE (0xffff = 65535)
+ * 
+ * There are `NUM_DIES` entries in the `tempDataBuf`, and all the elements of it will be
+ * initialized to: 
+ * 
+ * - blockingReqTail: REQ_SLOT_TAG_NONE //TODO
+ * 
+ * And the head/tail of `dataBufLruList` points to the first/last entry of `dataBuf`, this
+ * means the initial `dataBufLruList` contains all the data buffer entries, therefore the
+ * data buffer should be allocated from the last element of `dataBuf` array.
+ */
 void InitDataBuf()
 {
 	int bufEntry;
@@ -85,6 +117,10 @@ void InitDataBuf()
 		tempDataBufMapPtr->tempDataBuf[bufEntry].blockingReqTail =  REQ_SLOT_TAG_NONE;
 }
 
+
+/** //TODO 
+ * 
+ */
 unsigned int CheckDataBufHit(unsigned int reqSlotTag)
 {
 	unsigned int bufEntry, logicalSliceAddr;
@@ -141,6 +177,24 @@ unsigned int CheckDataBufHit(unsigned int reqSlotTag)
 	return DATA_BUF_FAIL;
 }
 
+
+/**
+ * Allocate a unused data buffer entry.
+ * 
+ * This function will retrieve the address of Least Recent Used data buffer entry from the
+ * `dataBufLruList`, then the retrieved entry will be the new HEAD of `dataBufLruList`.
+ * 
+ * If the `dataBufLruList` is empty, that is an error and means all the data buffer
+ * entries are used.
+ * 
+ * If LRU entry is the first element of `dataBuf` array, reset the `dataBufLruList` then
+ * insert the evicted entry to `dataBufLruList`, and keep the `prevEntry` and `nextEntry`
+ * points to DATA_BUF_NONE.
+ * 
+ * Otherwise, the evicted entry will be removed from `dataBuf` list, and become the new
+ * head of `dataBufLruList` list. Then the new LRU entry will become the `prevEntry` of
+ * evicted entry.
+ */
 unsigned int AllocateDataBuf()
 {
 	unsigned int evictedEntry = dataBufLruList.tailEntry;
@@ -161,10 +215,11 @@ unsigned int AllocateDataBuf()
 	}
 	else
 	{
+		// FIXME: why the evicted.next.prev not changed ???
 		dataBufMapPtr->dataBuf[evictedEntry].prevEntry = DATA_BUF_NONE;
-		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = DATA_BUF_NONE;
+		dataBufMapPtr->dataBuf[evictedEntry].nextEntry = DATA_BUF_NONE; // FIXME: ???
 		dataBufLruList.headEntry = evictedEntry;
-		dataBufLruList.tailEntry = evictedEntry;
+		dataBufLruList.tailEntry = evictedEntry; // FIXME: why reset ???
 	}
 
 	SelectiveGetFromDataBufHashList(evictedEntry);
@@ -173,6 +228,9 @@ unsigned int AllocateDataBuf()
 }
 
 
+/** //TODO
+ *
+ */
 void UpdateDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSlotTag)
 {
 	if(dataBufMapPtr->dataBuf[bufEntry].blockingReqTail != REQ_SLOT_TAG_NONE)
@@ -185,12 +243,19 @@ void UpdateDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSl
 }
 
 
+/**
+ * By default, there is only `NUM_DIES` entries in the `tempDataBuf`, so we can just use
+ * the serial number of each die to determine which temp entry should be used.
+ */
 unsigned int AllocateTempDataBuf(unsigned int dieNo)
 {
 	return dieNo;
 }
 
 
+/** //TODO
+ *
+ */
 void UpdateTempDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSlotTag)
 {
 
@@ -203,6 +268,13 @@ void UpdateTempDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int r
 	tempDataBufMapPtr->tempDataBuf[bufEntry].blockingReqTail = reqSlotTag;
 }
 
+/**/**
+ * @brief 
+ * 
+ */
+ * 
+ * The inserted entry will become the new tail entry of corresponding bucket. 
+ */
 void PutToDataBufHashList(unsigned int bufEntry)
 {
 	unsigned int hashEntry;
@@ -225,7 +297,11 @@ void PutToDataBufHashList(unsigned int bufEntry)
 	}
 }
 
-
+/**
+ * Remove the evicted entry from the hash table.
+ * 
+ * We may need to modify the head/tail index of corresponding bucket of hash table.
+ */
 void SelectiveGetFromDataBufHashList(unsigned int bufEntry)
 {
 	if(dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr != LSA_NONE)
@@ -236,21 +312,28 @@ void SelectiveGetFromDataBufHashList(unsigned int bufEntry)
 		nextBufEntry =  dataBufMapPtr->dataBuf[bufEntry].hashNextEntry;
 		hashEntry = FindDataBufHashTableEntry(dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr);
 
+		// body, no need to modify the head or tail index of this bucket
 		if((nextBufEntry != DATA_BUF_NONE) && (prevBufEntry != DATA_BUF_NONE))
 		{
 			dataBufMapPtr->dataBuf[prevBufEntry].hashNextEntry = nextBufEntry;
 			dataBufMapPtr->dataBuf[nextBufEntry].hashPrevEntry = prevBufEntry;
 		}
+
+		// tail, don't forget to modify the tail index of this bucket
 		else if((nextBufEntry == DATA_BUF_NONE) && (prevBufEntry != DATA_BUF_NONE))
 		{
 			dataBufMapPtr->dataBuf[prevBufEntry].hashNextEntry = DATA_BUF_NONE;
 			dataBufHashTablePtr->dataBufHash[hashEntry].tailEntry = prevBufEntry;
 		}
+
+		// head, don't forget to modify the head index of this bucket
 		else if((nextBufEntry != DATA_BUF_NONE) && (prevBufEntry == DATA_BUF_NONE))
 		{
 			dataBufMapPtr->dataBuf[nextBufEntry].hashPrevEntry = DATA_BUF_NONE;
 			dataBufHashTablePtr->dataBufHash[hashEntry].headEntry = nextBufEntry;
 		}
+
+		// bucket with only one entry, both the head and tail index should be modified
 		else
 		{
 			dataBufHashTablePtr->dataBufHash[hashEntry].headEntry = DATA_BUF_NONE;

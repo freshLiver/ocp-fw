@@ -61,6 +61,9 @@
 #include "../ftl_config.h"
 #include "../request_transform.h"
 
+/**
+ * Entry point for NVM read commands.
+ */
 void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 {
 	IO_READ_COMMAND_DW12 readInfo12;
@@ -85,7 +88,9 @@ void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 	ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_READ);
 }
 
-
+/**
+ * Entry point for NVM write commands.
+ */
 void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 {
 	IO_READ_COMMAND_DW12 writeInfo12;
@@ -122,6 +127,24 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 	nvmeIOCmd = (NVME_IO_COMMAND*)nvmeCmd->cmdDword;
 	opc = (unsigned int)nvmeIOCmd->OPC;
 
+
+    /**
+     * Interpret NVM Commands.
+     *
+     * Currently only three types of NVM commands are acceptable:
+     *
+     * 1. FLUSH (Opcode = 0x00):
+     *
+     *
+     * 2. WRITE (Opcode = 0x01):
+     * 3. READ  (Opcode = 0x02):
+     *
+     * If the opcode of received NVM command is not one of the above three, just
+     * ignore it.
+     *
+     * If more NVM commands are needed, they can also be implemented here.
+     *
+     */
 	switch(opc)
 	{
 		case IO_NVM_FLUSH:
@@ -144,6 +167,8 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
 			handle_nvme_io_read(nvmeCmd->cmdSlotTag, nvmeIOCmd);
 			break;
 		}
+
+        // TODO: implement special command for storing TIFF image
 		default:
 		{
 			xil_printf("Not Support IO Command OPC: %X\r\n", opc);

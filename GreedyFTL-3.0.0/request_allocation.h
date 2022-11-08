@@ -50,11 +50,20 @@
 #include "request_format.h"
 #include "request_queue.h"
 
+// FIXME: typo, why 128? 
 #define	AVAILABLE_OUNTSTANDING_REQ_COUNT			((USER_DIES) * 128)  //regardless of request type
 
 #define REQ_SLOT_TAG_NONE		0xffff
 #define REQ_SLOT_TAG_FAIL		0xffff
 
+/**
+ * \brief The main structure of Reservation Station that contains only an fixed-size array
+ * of `SSD_REQ_FORMAT`.
+ * 
+ * Unlike the schematic in the paper, this queue is shared by both host and flash
+ * operations, so the structure of `SSD_REQ_FORMAT` contains some members for
+ * distinguishing which type is the request.
+ */
 typedef struct _REQ_POOL
 {
 	SSD_REQ_FORMAT reqPool[AVAILABLE_OUNTSTANDING_REQ_COUNT];

@@ -59,6 +59,7 @@ P_RETRY_LIMIT_TABLE retryLimitTablePtr;
 P_DIE_STATE_TABLE dieStateTablePtr;
 P_WAY_PRIORITY_TABLE wayPriorityTablePtr;
 
+/* Initialize the tables that would be used for scheduling. */
 void InitReqScheduler()
 {
 	int chNo,wayNo;
@@ -141,20 +142,49 @@ void SchedulingNandReq()
 		SchedulingNandReqPerCh(chNo);
 }
 
+
+/**
+ * The main function for scheduling NAND requests.
+ */
 void SchedulingNandReqPerCh(unsigned int chNo)
 {
 	unsigned int readyBusy, wayNo, reqStatus, nextWay, waitWayCnt;
 
 	waitWayCnt = 0;
+
+	/**
+	 * Before doing scheduling on this channel, we should check if there is any idle way
+	 * on this channel.
+	 * 
+	 * If there is any idle way in the idle list, we have to traverse the idle list, and
+	 * try to schedule requests on the idle ways.
+	 */
 	if(wayPriorityTablePtr->wayPriority[chNo].idleHead != WAY_NONE)
 	{
 		wayNo = wayPriorityTablePtr->wayPriority[chNo].idleHead;
 
 		while(wayNo != WAY_NONE)
 		{
+			/**
+			 * Currently no available requests should be executed on this way, but there
+			 * may be some requests in the `blockedByRowAddrDepReqQ` instead, try to 
+			 * release the `blockedByRowAddrDepReqQ` first and check again later.
+			 */
 			if(nandReqQ[chNo][wayNo].headReq == REQ_SLOT_TAG_NONE)
 				ReleaseBlockedByRowAddrDepReq(chNo, wayNo);
 
+			/**
+			 * `PutToNandReqQ` may be called in `ReleaseBlockedByRowAddrDepReq` and change
+			 * the `headReq`, so we have to check `headReq` again to make sure there is
+			 * really no request to be schedule on this way.
+			 * 
+			 * If there is any NAND request should be scheduled on this way, and schedule
+			 * that request on the first idle way by adding to the `NandWayPriorityTable`,
+			 * and remove the target way from the idle list of this channel.
+			 * 
+			 * If there is really no request want to use this way, just check next idle
+			 * way.
+			 */
 			if(nandReqQ[chNo][wayNo].headReq != REQ_SLOT_TAG_NONE)
 			{
 				nextWay = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
@@ -171,6 +201,19 @@ void SchedulingNandReqPerCh(unsigned int chNo)
 			}
 		}
 	}
+	
+	/** 
+	 * After all idle ways were checked and these are some requests to do, we now ready
+	 * to issue requests to NAND. However, the channel controller of target way may not
+	 * ready yet, thus we have to check whether the channel is busy before issuing the
+	 * requests to target way.
+	 * 
+	 * If the target way of a request is ready (not running), just execute the request and
+	 * check ??
+	 * 
+	 * Otherwise, just record and skip that request. 
+	 * 
+	 */
 	if(wayPriorityTablePtr->wayPriority[chNo].statusReportHead != WAY_NONE)
 	{
 		readyBusy = V2FReadyBusyAsync(chCtlReg[chNo]);
@@ -188,6 +231,7 @@ void SchedulingNandReqPerCh(unsigned int chNo)
 					nextWay = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
 					SelectivGetFromNandStatusReportList(chNo, wayNo);
 
+					// TODO: why release again?
 					if(nandReqQ[chNo][wayNo].headReq == REQ_SLOT_TAG_NONE)
 						ReleaseBlockedByRowAddrDepReq(chNo, wayNo);
 
@@ -222,6 +266,13 @@ void SchedulingNandReqPerCh(unsigned int chNo)
 			}
 		}
 	}
+	
+	/**
+	 * At the last, we have to deal with those skipped requests.
+	 * 
+	 * If the controller of target channel is busy, we can't do anything, just skip.
+	 * Else, 
+	 */
 	if(waitWayCnt != USER_WAYS)
 		if(!V2FIsControllerBusy(chCtlReg[chNo]))
 		{
@@ -320,6 +371,9 @@ void SchedulingNandReqPerCh(unsigned int chNo)
 
 }
 
+/**
+ * This function add NAND request to corresponding NAND operation list before issuing.
+ */
 void PutToNandWayPriorityTable(unsigned int reqSlotTag, unsigned int chNo, unsigned int wayNo)
 {
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
@@ -356,12 +410,21 @@ void PutToNandIdleList(unsigned int chNo, unsigned int wayNo)
 }
 
 
+/**
+ * // FIXME: function name typo
+ * // TODO: use var or macro to improve readability
+ * 
+ * If target way is not in the dieState list, reset the idle list.
+ * If target way is head/tail node of dieState list, move to head/tail of idle list.
+ * Otherwise, remove this way from dieState list.
+ */
 void SelectivGetFromNandIdleList(unsigned int chNo, unsigned int wayNo)
 {
 	if((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) && (dieStateTablePtr->dieState[chNo][wayNo].prevWay != WAY_NONE))
 	{
 		dieStateTablePtr->dieState[chNo][dieStateTablePtr->dieState[chNo][wayNo].prevWay].nextWay = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
 		dieStateTablePtr->dieState[chNo][dieStateTablePtr->dieState[chNo][wayNo].nextWay].prevWay = dieStateTablePtr->dieState[chNo][wayNo].prevWay;
+		// FIXME: why no need to change the wayPriority
 	}
 	else if((dieStateTablePtr->dieState[chNo][wayNo].nextWay == WAY_NONE) && (dieStateTablePtr->dieState[chNo][wayNo].prevWay != WAY_NONE))
 	{
@@ -639,6 +702,21 @@ void SelectiveGetFromNandStatusCheckList(unsigned int chNo, unsigned int wayNo)
 
 }
 
+
+/**
+ * The main function that issue the flash operations to storage controllers.
+ * 
+ * In this function, we should check the type of the request to be executed
+ * first, then call the corresponding handle function.
+ * 
+ * - READ
+ * - READ_TRANSFER
+ * - WRITE
+ * - ERASE
+ * - RESET
+ * 
+ * // FIXME: why no flush operation??
+ */
 void IssueNandReq(unsigned int chNo, unsigned int wayNo)
 {
 	unsigned int reqSlotTag, rowAddr;
@@ -651,7 +729,8 @@ void IssueNandReq(unsigned int chNo, unsigned int wayNo)
 	rowAddr = GenerateNandRowAddr(reqSlotTag);
 	dataBufAddr = (void*)GenerateDataBufAddr(reqSlotTag);
 	spareDataBufAddr = (void*)GenerateSpareDataBufAddr(reqSlotTag);
-
+	
+	// TODO: replace the condition statements with switch statement
 	if(reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
 	{
 		dieStateTablePtr->dieState[chNo][wayNo].reqStatusCheckOpt = REQ_STATUS_CHECK_OPT_CHECK;
@@ -746,6 +825,21 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
 	return rowAddr;
 }
 
+
+/** //TODO
+ * Allocate a buffer (called ENTRY here) in RAM for Host DMA operations.
+ * 
+ * Before issuing the DMA operations, use have to allocate a ENTRY where the host or flash
+ * device will write data to or get data from, during the READ or WRITE operations.
+ * 
+ * If the buffer will be used by Host DMA operation, 
+ * 
+ * 
+ * 
+ * If the buffer will be used by NAND DMA operation, we will allocate PAGE_SIZE (16KB by
+ * default) space in the RAM,
+ * 
+ */
 unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
 {
 	if(reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NAND)
@@ -757,7 +851,7 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
 		else if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
 			return reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr;
 
-		return RESERVED_DATA_BUFFER_BASE_ADDR;
+		return RESERVED_DATA_BUFFER_BASE_ADDR;	// for ERASE operation 
 	}
 	else if(reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NVME_DMA)
 	{
@@ -884,6 +978,10 @@ unsigned int CheckEccErrorInfo(unsigned int chNo, unsigned int wayNo)
 	return ERROR_INFO_FAIL;
 }
 
+
+/** //TODO
+ * Before executing requests, we should do some 
+*/
 void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatus)
 {
 	unsigned int reqSlotTag, rowAddr, phyBlockNo;

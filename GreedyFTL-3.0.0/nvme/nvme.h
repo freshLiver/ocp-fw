@@ -82,9 +82,9 @@
 #define IO_NVM_FLUSH										0x00
 #define IO_NVM_WRITE										0x01
 #define IO_NVM_READ											0x02
-#define IO_NVM_WRITE_UNCORRECTABLE							0x04
-#define IO_NVM_COMPARE										0x05
-#define IO_NVM_DATASET_MANAGEMENT							0x09
+#define IO_NVM_WRITE_UNCORRECTABLE							0x04 	/* Not acceptable yet */
+#define IO_NVM_COMPARE										0x05 	/* Not acceptable yet */
+#define IO_NVM_DATASET_MANAGEMENT							0x09 	/* Not acceptable yet */
 
 /*Status Code Type */
 #define SCT_GENERIC_COMMAND_STATUS							0
@@ -196,14 +196,44 @@
 #define NVME_TASK_RESET										0x5
 #pragma pack(push, 1)
 
+
+/**
+ * The main structure of NVMe Commands.
+ */
 typedef struct _NVME_COMMAND
 {
-	unsigned short qID;
-	unsigned short cmdSlotTag;
-	unsigned int cmdSeqNum;
+	unsigned short qID;			///< Queue ID, 0 for admin queue.
+	unsigned short cmdSlotTag;	/// TODO
+	unsigned int cmdSeqNum;		/// TODO
+
+    /**
+     * Each command consisted of 16 DWORDs (64B), also called CDW (Command DWords):
+     *
+     * - CDW[00]:
+     * 		* bit[00,07]: Command opcode.
+     * 		* bit[08,09]: Fused operation, 00 for normal operation.
+     * 		* bit[10,13]: RESERVED.
+     * 		* bit[14,15]: 00 for PRP, otherwise SGL.
+     * 		* bit[16,31]: Command ID.
+     * - CDW[01]: NSID (NameSpace ID, infomation of the controller and driver?) // FIXME
+     * - CDW[02,03]: RESERVED.
+     * - CDW[04,05]: Metadata pointer.
+     * - CDW[06,07]: PRP[0], physical memory address of data or PRP list
+     * - CDW[08,09]: PRP[1], physical memory address of data or PRP list
+     *      * the first entry of PRP list may be misaligned
+     *      * the last entry may point to a page that contains more PRP entries
+     * - CDW[10,15]: Command specific.
+     *
+     * This member will be casted to NVME_IO_COMMAND or NVME_ADMIN_COMMAND.
+     */
 	unsigned int cmdDword[16];
 }NVME_COMMAND;
 
+
+/**
+ * The structure of a admin queue entry for admin commands, has the same structure as I/O
+ * command. Check the NVME_COMMAND and command specified structs for detailed info.
+ */
 typedef struct _NVME_ADMIN_COMMAND
 {
 	union {
@@ -231,6 +261,11 @@ typedef struct _NVME_ADMIN_COMMAND
 	};
 }NVME_ADMIN_COMMAND;
 
+
+/**
+ * The structure of a I/O queue entry for I/O commands, has the same structure as admin
+ * command. Check the NVME_COMMAND and command specified structs for detailed info.
+ */
 typedef struct _NVME_IO_COMMAND
 {
 	union {
@@ -244,10 +279,34 @@ typedef struct _NVME_IO_COMMAND
 				unsigned short CID;
 			};
 			unsigned int NSID;
+
+			/**
+             * For read command, CDW[02,03] were used for:
+             *
+             * - ELBST  (Expected Logical Block Storage Tag):
+             * - EILBRT (Expected Initial Logical Block Reference Tag):
+             *
+             * For write command, CDW[02,03] and CDW[14] were used for:
+             *
+             * - LBST  (Logical Block Storage Tag):
+             * - ILBRT (Initial Logical Block Reference Tag):
+             */
 			unsigned int reserved1[2];
+
+            /**
+             * The pointer to metadata.
+             *
+             * For write command: //TODO
+             */
 			unsigned int MPTR[2];
 			unsigned int PRP1[2];
 			unsigned int PRP2[2];
+
+            /**
+             * For read and write commands, CDW[10, 11] were used for:
+             *
+             * - SLBA (Starting LBA): specifying the first LBA to be read
+             */
 			unsigned int dword10;
 			unsigned int dword11;
 			unsigned int dword12;
@@ -258,6 +317,12 @@ typedef struct _NVME_IO_COMMAND
 	};
 }NVME_IO_COMMAND;
 
+
+/**
+ * The main structure of completion queue entry.
+ *
+ * A completion queue entry consisted of 4 DWORDs (16B) // FIXME: but here only 2DW?
+ */
 typedef struct _NVME_COMPLETION
 {
 	union {
@@ -661,6 +726,19 @@ typedef struct _ADMIN_IDENTIFY_NAMESPACE
 
 
 /* IO Write Command */
+
+/**
+ * For read and write commands, CDW[12] was used for:
+ *
+ * - bit[00,15]: Num of Logical Blocks to read or write
+ * - bit[16,19]: Reserved
+ * - bit[20,23]: Directive Type for write command.
+ * - bit[24]:    STC // FIXME
+ * - bit[25]:    Reserved
+ * - bit[26,29]: Protection Info
+ * - bit[30]:    Force Unit Access
+ * - bit[31]:    Limited Retry
+ */
 typedef struct _IO_WRITE_COMMAND_DW12
 {
 	union {
@@ -683,9 +761,17 @@ typedef struct _IO_WRITE_COMMAND_DW13
 			struct
 			{
 				unsigned char AccessFrequency			:4;
+                /**
+                 * These two bits //TODO
+                 * 
+                 * 0b00: No latency info
+                 * 0b01: Long latency is acceptable
+                 * 0b10: Normal/Typical latency
+                 * 0b11: Low latency
+                */
 				unsigned char AccessLatency				:2;
-				unsigned char SequentialRequest			:1;
-				unsigned char Incompressible			:1;
+				unsigned char SequentialRequest			:1; 	// seq request or not
+				unsigned char Incompressible			:1; 	// could be compressed or not
 			} DSM;
 			unsigned char reserved0[3];
 		};
@@ -710,10 +796,20 @@ typedef struct _IO_READ_COMMAND_DW12
 	union {
 		unsigned int dword;
 		struct {
+			/* Num of logical blocks to read */
 			unsigned short NLB;
+            /**
+             * // FIXME: STC
+             */
 			unsigned short reserved0				:10;
+            /* Protection information action and check field */
 			unsigned short PRINFO					:4;
+            /**
+             * 1 for Force Unit Access:
+             *
+             */
 			unsigned short FUA						:1;
+            /* Enable Limited Retry or not */
 			unsigned short LR						:1;
 		};
 	};

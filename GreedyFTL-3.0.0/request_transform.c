@@ -158,7 +158,11 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 }
 
 
-
+/**
+ * Clear the allocated data buffer entry used by a previous request.
+ * 
+ * 
+ */
 void EvictDataBufEntry(unsigned int originReqSlotTag)
 {
 	unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
@@ -223,6 +227,16 @@ void ReqTransSliceToLowLevel()
 {
 	unsigned int reqSlotTag, dataBufEntry;
 
+
+	/**
+	 * Select slice command from slice queue if not empty.
+	 * 
+	 * This part has several important works to do:
+	 * 
+	 * - allocate an entry in reservation station
+	 * - check command type (read or write)
+	 * 
+	 */
 	while(sliceReqQ.headReq != REQ_SLOT_TAG_NONE)
 	{
 		reqSlotTag = GetFromSliceReqQ();
@@ -408,15 +422,29 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
 	unsigned int dieNo, chNo, wayNo, bufDepCheckReport, rowAddrDepCheckReport, rowAddrDepTableUpdateReport;
 
 	bufDepCheckReport = CheckBufDep(reqSlotTag);
+
+	// TODO
 	if(bufDepCheckReport == BUF_DEPENDENCY_REPORT_PASS)
 	{
+		/** NOTE: If host DMA ?
+		 *
+		 */
 		if(reqPoolPtr->reqPool[reqSlotTag].reqType  == REQ_TYPE_NVME_DMA)
 		{
 			IssueNvmeDmaReq(reqSlotTag);
 			PutToNvmeDmaReqQ(reqSlotTag);
 		}
+
+		/**
+		 * NOTE: If flash operations?
+		 * 
+		 * If this a request to NAND flash, get the **location vector (chNo, wayNo, Row)**
+		 * by translating the virtual slice address (if needed), then check dependency and
+		 * put this request to NAND flash request queue.
+		 */
 		else if(reqPoolPtr->reqPool[reqSlotTag].reqType  == REQ_TYPE_NAND)
 		{
+			// get physical address
 			if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr == REQ_OPT_NAND_ADDR_VSA)
 			{
 				dieNo = Vsa2VdieTranslation(reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr);
@@ -431,6 +459,18 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
 			else
 				assert(!"[WARNING] Not supported reqOpt-nandAddress [WARNING]");
 
+			/**
+			 * Flash requests like READ and WRITE may be blocked when the way is busy, so
+			 * we have to check the dep of row address and determine whether we have to
+			 * block the request.
+			 * 
+			 * If the dependency check was passed, this request can be add to `NandReqQ`,
+			 * otherwise, it should be added to `BlockedByRowAddrDepReqQ` and wait for 
+			 * the call of `ReleaseBlockedByBufDepReq` that release the blocked requests.
+			 * 
+			 * For operations that no need to check dependency, e.g. we may want just to
+			 * read the bad block table, we can just add the request to the `NandReqQ`.
+			 */
 			if(reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck == REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK)
 			{
 				rowAddrDepCheckReport = CheckRowAddrDep(reqSlotTag, ROW_ADDR_DEPENDENCY_CHECK_OPT_SELECT);
@@ -538,6 +578,11 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
 }
 
 
+/**
+ * Release blocked requests of the specified way.
+ * 
+ * just traverse the `blockedByRowAddrDepReqQ` of this way, then
+ */
 void ReleaseBlockedByRowAddrDepReq(unsigned int chNo, unsigned int wayNo)
 {
 	unsigned int reqSlotTag, nextReq, rowAddrDepCheckReport;

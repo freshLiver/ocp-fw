@@ -50,6 +50,8 @@
 #include "ftl_config.h"
 #include "nvme/nvme.h"
 
+/* LSA for Logical Slice Address */
+
 #define LSA_NONE	0xffffffff
 #define LSA_FAIL	0xffffffff
 
