@@ -262,8 +262,10 @@ void UpdateTempDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int r
     tempDataBufMapPtr->tempDataBuf[bufEntry].blockingReqTail = reqSlotTag;
 }
 
-/**/ ***@brief ** / **The inserted entry will become the new tail entry of corresponding bucket.* /
-    void PutToDataBufHashList(unsigned int bufEntry)
+/**
+ * The inserted entry will become the new tail entry of corresponding bucket.
+ */
+void PutToDataBufHashList(unsigned int bufEntry)
 {
     unsigned int hashEntry;
 
