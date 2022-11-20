@@ -60,11 +60,19 @@
 #define FindDataBufHashTableEntry(logicalSliceAddr) ((logicalSliceAddr) % AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
 
 /**
- * The structure of an entry of data buffer.
+ * @brief The structure of the data buffer entry.
+ * 
+ * Basically following information:
+ * 
+ * - the logical address of the underlying slice command
+ * - whether is buffer entry dirty or not
+ * - the prev/next entry index in the LRU list
+ * - the prev/next entry index in the data buffer bucket
+ * - // TODO
  */
 typedef struct _DATA_BUF_ENTRY
 {
-    unsigned int logicalSliceAddr;
+    unsigned int logicalSliceAddr;     // the logical address of the underlying slice command
     unsigned int prevEntry : 16;       // the index of pref entry in the dataBuf
     unsigned int nextEntry : 16;       // the index of next entry in the dataBuf
     unsigned int blockingReqTail : 16; // TODO
@@ -75,39 +83,69 @@ typedef struct _DATA_BUF_ENTRY
 } DATA_BUF_ENTRY, *P_DATA_BUF_ENTRY;
 
 /**
- * The main structure of fixed-size data buffer.
- * // TODO:
- * An 1D data buffer array with AVAILABLE_DATA_BUFFER_ENTRY_COUNT entries. When
+ * @brief The structure of data buffer table.
+ *
+ * A fixed-sized 1D data buffer array. Used for storing a slice command and managing the
+ * relation between data buffer entries.
  */
 typedef struct _DATA_BUF_MAP
 {
-    /* Array of fixed-size data buffer entries. */
     DATA_BUF_ENTRY dataBuf[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
 } DATA_BUF_MAP, *P_DATA_BUF_MAP;
 
+/**
+ * @brief The structure of LRU list that records the head and tail data buffer entry index
+ * of the LRU list.
+ * 
+ * This structure only records the head and tail index, therefore we need to manage the
+ * relation between data buffer entries by maintaining the `prevEntry` and `nextEntry` of
+ * the data buffer entries in this LRU list.
+ */
 typedef struct _DATA_BUF_LRU_LIST
 {
-    unsigned int headEntry : 16;
-    unsigned int tailEntry : 16;
+    unsigned int headEntry : 16; // the MRU entry
+    unsigned int tailEntry : 16; // the LRU entry
 } DATA_BUF_LRU_LIST, *P_DATA_BUF_LRU_LIST;
 
+/**
+ * @brief The structure of data buffer bucket that records the head and tail data buffer
+ * entry index in the bucket.
+ * 
+ * Similar to the LRU list, this structure only records the head and tail index, therefore
+ * we must manage the relation between data buffer entries in this bucket by maintaining
+ * the `hashPrevEntry` and `hashNextEntry` of the data buffer entries.
+ */
 typedef struct _DATA_BUF_HASH_ENTRY
 {
-    unsigned int headEntry : 16;
-    unsigned int tailEntry : 16;
+    unsigned int headEntry : 16; // the first data buffer entry in this bucket
+    unsigned int tailEntry : 16; // the last data buffer entry in this bucket
 } DATA_BUF_HASH_ENTRY, *P_DATA_BUF_HASH_ENTRY;
 
+/**
+ * @brief The structure of data buffer hash table.
+ * 
+ * A fixed-sized 1D data buffer bucket array. Used for fast finding the data buffer entry
+ * of a given request by the `logicalSliceAddr`.
+ */
 typedef struct _DATA_BUF_HASH_TABLE
 {
     DATA_BUF_HASH_ENTRY dataBufHash[AVAILABLE_DATA_BUFFER_ENTRY_COUNT];
 } DATA_BUF_HASH_TABLE, *P_DATA_BUF_HASH_TABLE;
 
+/* TODO */
 typedef struct _TEMPORARY_DATA_BUF_ENTRY
 {
     unsigned int blockingReqTail : 16;
     unsigned int reserved0 : 16;
 } TEMPORARY_DATA_BUF_ENTRY, *P_TEMPORARY_DATA_BUF_ENTRY;
 
+/**
+ * @brief The structure of the temp data buffer table.
+ * 
+ * A fixed-sized 1D temp data buffer array. The number of buffer entries is exactly the
+ * number of dies, therefore just choose the target entry by using the dieNo when 
+ * allocating a temp buffer entry. (check the implementation of `AllocateTempDataBuf`).
+ */
 typedef struct _TEMPORARY_DATA_BUF_MAP
 {
     TEMPORARY_DATA_BUF_ENTRY tempDataBuf[AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT];
