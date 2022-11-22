@@ -118,9 +118,11 @@ void InitDataBuf()
  *
  * Try to find the data buffer entry of the given request (with same `logicalSliceAddr`)
  * by traversing the correspoding bucket of the given request.
- * 
+ *
  * If the request found, the corresponding data buffer entry become the Most Recently Used
  * entry and should be moved to the head of LRU list.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be check
  */
 unsigned int CheckDataBufHit(unsigned int reqSlotTag)
 {
@@ -245,8 +247,19 @@ unsigned int AllocateDataBuf()
     return evictedEntry;
 }
 
-/** //TODO
+/**
+ * @brief Append the request to the blocking queue specified by given buffer entry.
  *
+ * The two blocking request queue only records the request pool entry index of the first
+ * (head) and last (tail) request in the queue, so we need to use `prevBlockingReq` and
+ * `nextBlockingReq` of the request pool entry and the `blockingReqTail` of data buffer
+ * entry to maintain the blocking queue.
+ *
+ * NOTE: the blocking request queue where the specified request to be inserted to is
+ * specified by the `blockingReqTail`.
+ *
+ * @param byfEntry the data buffer entry index of the specified request
+ * @param reqSlotTag the request pool entry index of the request to be
  */
 void UpdateDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSlotTag)
 {
@@ -265,11 +278,18 @@ void UpdateDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSl
  *
  * By default, there is only `NUM_DIES` entries in the `tempDataBuf`, so we can just use
  * the serial number of each die to determine which temp entry should be used.
+ *
+ * @param dieNo an unique number of the specified die
  */
 unsigned int AllocateTempDataBuf(unsigned int dieNo) { return dieNo; }
 
-/** //TODO
+/**
+ * @brief Append the request to the blocking queue specified by given temp buffer entry.
  *
+ * Similar to `UpdateDataBufEntryInfoBlockingReq()`, but the data buffer is temp buffer.
+ *
+ * @param byfEntry the temp data buffer entry index of the specified request
+ * @param reqSlotTag the request pool entry index of the request to be
  */
 void UpdateTempDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSlotTag)
 {
@@ -289,6 +309,8 @@ void UpdateTempDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int r
  * Insert the given data buffer entry into the tail of hash table bucket specified by the
  * `logicalSliceAddr` of the given entry, and modify the tail (head as well, if needed) of
  * target hash table bucket.
+ *
+ * @param bufEntry the index of the data buffer entry to be inserted
  */
 void PutToDataBufHashList(unsigned int bufEntry)
 {
@@ -317,6 +339,8 @@ void PutToDataBufHashList(unsigned int bufEntry)
  *
  * We may need to modify the head/tail index of corresponding bucket specified by the
  * `logicalSliceAddr` of the given data buffer entry.
+ *
+ * @param bufEntry the index of the data buffer entry to be removed
  */
 void SelectiveGetFromDataBufHashList(unsigned int bufEntry)
 {
