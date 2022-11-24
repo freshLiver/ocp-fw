@@ -848,19 +848,40 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
     return rowAddr;
 }
 
-/** //TODO
- * Allocate a buffer (called ENTRY here) in RAM for Host DMA operations.
+/**
+ * @brief Get the corresponding data buffer entry address of the given request.
  *
- * Before issuing the DMA operations, use have to allocate a ENTRY where the host or flash
- * device will write data to or get data from, during the READ or WRITE operations.
+ * Before issuing the DMA operations, we have to set the buffer address where the request
+ * should get/put their data during the READ/WRITE request.
  *
- * If the buffer will be used by Host DMA operation,
+ * To do this, we may have to specify the entry index of real data buffer and convert to
+ * the real address if the data buffer format not `REQ_OPT_DATA_BUF_ADDR`:
  *
+ * - find the index of data buffer entry to be used:
  *
+ *      Similar to the two request data buffer `dataBuf` and `tempDataBuf`, there are also
+ *      two types of real data buffer specified by the two address `DATA_BUFFER_BASE_ADDR`
+ *      and `TEMPORARY_DATA_BUFFER_BASE_ADDR`.
  *
- * If the buffer will be used by NAND DMA operation, we will allocate PAGE_SIZE (16KB by
- * default) space in the RAM,
+ *      Since the two real data buffer have same number of entries with its corresponding
+ *      request data buffer, `AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT` for temp buffer
+ *      and `AVAILABLE_DATA_BUFFER_ENTRY_COUNT` for normal buffer, we can just simply use
+ *      the index of the request data buffer entry to find the corresponding index of real
+ *      data buffer entry.
  *
+ * - get the address of real data buffer entry:
+ *
+ *      Since the real data buffer entry have the same size with NAND page size, and we
+ *      have already found the entry index, we can just multiply the index by the page
+ *      size defined by `BYTES_PER_DATA_REGION_OF_SLICE`.
+ *
+ *      However, if the request is a NVMe request, we should do some extra works. Since
+ *      the unit size of NVMe block is 4K, which is one-fourth of the page size, if the
+ *      LBA didn't align by 4, we have to move N*4K bytes within the real data buffer
+ *      entry by using the offset to find the address corresponding to the NVMe block.
+ *
+ * @param reqSlotTag the request data buffer entry index
+ * @return unsigned int the address of real data buffer entry to be used
  */
 unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
 {
@@ -875,7 +896,7 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
         else if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
             return reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr;
 
-        return RESERVED_DATA_BUFFER_BASE_ADDR; // for ERASE operation
+        return RESERVED_DATA_BUFFER_BASE_ADDR; // FIXME: for ERASE operation?
     }
     else if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NVME_DMA)
     {
@@ -890,6 +911,20 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
         assert(!"[WARNING] wrong reqType [WARNING]");
 }
 
+/**
+ * @brief Get the corresponding sparse data buffer entry address of the given request.
+ *
+ * Similar to `GenerateDataBufAddr()`, but with different buffer base address, different
+ * entry size (256B for metadata/sparse data) and no need to deal with the offset of NVMe
+ * requests.
+ *
+ * NOTE: the `RESERVED_DATA_BUFFER_BASE_ADDR` didn't explicitly split into real data area
+ * and sparse data area, hence we should manually add 16K (page size) to get the area for
+ * sparse data.
+ *
+ * @param reqSlotTag the request data buffer entry index
+ * @return unsigned int the address of sparse data buffer entry to be used
+ */
 unsigned int GenerateSpareDataBufAddr(unsigned int reqSlotTag)
 {
     if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NAND)
