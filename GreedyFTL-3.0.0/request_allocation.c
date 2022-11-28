@@ -58,6 +58,22 @@ NAND_REQUEST_QUEUE nandReqQ[USER_CHANNELS][USER_WAYS];
 unsigned int notCompletedNandReqCnt;
 unsigned int blockedReqCnt;
 
+/**
+ * @brief Initialize the request pool and the request queues.
+ *
+ * At the beginning, all the requests are stored in the `freeReqQ`, therefore the size of
+ * `freeReqQ` should equal to the size of request pool, and the others request queue will
+ * be initialized to be empty.
+ *
+ * After all the queues are initialized, we next have to initialize the request pool:
+ *
+ * - all the entries should belongs to `freeReqQ` by default
+ * - all the entries should be connected in serial order
+ * - no request exists at the beginning, therefore:
+ *      - the number of not completed NAND request is zero
+ *      - the number of blocking requests is zero
+ *      - both `prevBlockingReq` and `nextBlockingReq` should be NONE
+ */
 void InitReqPool()
 {
     int chNo, wayNo, reqSlotTag;
@@ -102,12 +118,27 @@ void InitReqPool()
 
     reqPoolPtr->reqPool[0].prevReq                                    = REQ_SLOT_TAG_NONE;
     reqPoolPtr->reqPool[AVAILABLE_OUNTSTANDING_REQ_COUNT - 1].nextReq = REQ_SLOT_TAG_NONE;
-    freeReqQ.reqCnt                                                   = AVAILABLE_OUNTSTANDING_REQ_COUNT;
+    freeReqQ.reqCnt = AVAILABLE_OUNTSTANDING_REQ_COUNT; // FIXME: moved up ??
 
     notCompletedNandReqCnt = 0;
     blockedReqCnt          = 0;
 }
 
+/**
+ * @brief Add the given request to the free request queue.
+ *
+ * Insert the given request into the tail of the free queue and update the corresponding
+ * field of the given request.
+ *
+ * NOTE: this function will not modify the `prevReq` of the next request in the original
+ * request queue. That is, the prev request entry index of the original next request may
+ * still be `reqSlotTag`.
+ *
+ * NOTE: also, this function will not modify the `prevBlockingReq` and `nextBlockingReq`
+ * of the original request.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be added.
+ */
 void PutToFreeReqQ(unsigned int reqSlotTag)
 {
     if (freeReqQ.tailReq != REQ_SLOT_TAG_NONE)
@@ -129,18 +160,29 @@ void PutToFreeReqQ(unsigned int reqSlotTag)
     freeReqQ.reqCnt++;
 }
 
+/**
+ * @brief Get a free request from the free request queue.
+ *
+ * Try to get the first entry (FIFO) from the free queue. If the `freeReqQ` is empty, use
+ * the function `SyncAvailFreeReq()` to release some requests and recycle the request pool
+ * entries occupied by them.
+ *
+ * @return unsigned int the request pool entry index of the free request queue entry
+ */
 unsigned int GetFromFreeReqQ()
 {
     unsigned int reqSlotTag;
 
     reqSlotTag = freeReqQ.headReq;
 
+    // try to release some request entries by doing scheduling
     if (reqSlotTag == REQ_SLOT_TAG_NONE)
     {
         SyncAvailFreeReq();
         reqSlotTag = freeReqQ.headReq;
     }
 
+    // if the free queue becomes empty, don't forget to update its tail pointer
     if (reqPoolPtr->reqPool[reqSlotTag].nextReq != REQ_SLOT_TAG_NONE)
     {
         freeReqQ.headReq = reqPoolPtr->reqPool[reqSlotTag].nextReq;
@@ -158,6 +200,13 @@ unsigned int GetFromFreeReqQ()
     return reqSlotTag;
 }
 
+/**
+ * @brief Add the given request to the slice request queue.
+ *
+ * Similar to `PutToFreeReqQ()`.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be added
+ */
 void PutToSliceReqQ(unsigned int reqSlotTag)
 {
     if (sliceReqQ.tailReq != REQ_SLOT_TAG_NONE)
@@ -179,6 +228,16 @@ void PutToSliceReqQ(unsigned int reqSlotTag)
     sliceReqQ.reqCnt++;
 }
 
+/**
+ * @brief Get a slice request from the slice request queue.
+ *
+ * Try to pop the first request of the slice request queue.
+ *
+ * NOTE: fail if the request queue is empty.
+ *
+ * @return unsigned int the entry index of chosen slice request, or `REQ_SLOT_TAG_FAIL`
+ * if the slice request queue is empty.
+ */
 unsigned int GetFromSliceReqQ()
 {
     unsigned int reqSlotTag;
@@ -205,6 +264,16 @@ unsigned int GetFromSliceReqQ()
     return reqSlotTag;
 }
 
+/**
+ * @brief Add the given request to `blockedByBufDepReqQ`.
+ *
+ * Similar to `PutToFreeReqQ()`.
+ *
+ * NOTE: the request blocked by buffer dependency is also a blocked request, therefore the
+ * `blockedReqCnt` should also be increased.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be added
+ */
 void PutToBlockedByBufDepReqQ(unsigned int reqSlotTag)
 {
     if (blockedByBufDepReqQ.tailReq != REQ_SLOT_TAG_NONE)
@@ -226,6 +295,17 @@ void PutToBlockedByBufDepReqQ(unsigned int reqSlotTag)
     blockedByBufDepReqQ.reqCnt++;
     blockedReqCnt++;
 }
+
+/**
+ * @brief Remove the given request from the `blockedByBufDepReqQ`.
+ *
+ * Similar to `GetFromSliceReqQ()`, but the entry to be removed is specified by the param
+ * `reqSlotTag`.
+ *
+ * NOTE: don't forget to decrease `blockedReqCnt`
+ *
+ * @param reqSlotTag the request pool entry index of the request to be removed
+ */
 void SelectiveGetFromBlockedByBufDepReqQ(unsigned int reqSlotTag)
 {
     unsigned int prevReq, nextReq;
@@ -262,6 +342,18 @@ void SelectiveGetFromBlockedByBufDepReqQ(unsigned int reqSlotTag)
     blockedReqCnt--;
 }
 
+/**
+ * @brief Add the given request to `blockedByRowAddrDepReqQ`.
+ *
+ * Similar to `PutToBlockedByBufDepReqQ()`.
+ *
+ * NOTE: the request blocked by row address dependency is also a blocked request, the
+ * `blockedReqCnt` thus should also be increased.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be added.
+ * @param chNo the channel number of the specified queue.
+ * @param wayNo the die number of the specified queue.
+ */
 void PutToBlockedByRowAddrDepReqQ(unsigned int reqSlotTag, unsigned int chNo, unsigned int wayNo)
 {
     if (blockedByRowAddrDepReqQ[chNo][wayNo].tailReq != REQ_SLOT_TAG_NONE)
@@ -283,6 +375,16 @@ void PutToBlockedByRowAddrDepReqQ(unsigned int reqSlotTag, unsigned int chNo, un
     blockedByRowAddrDepReqQ[chNo][wayNo].reqCnt++;
     blockedReqCnt++;
 }
+
+/**
+ * @brief Remove the given request from the `blockedByRowAddrDepReqQ`.
+ *
+ * Similar to `SelectiveGetFromBlockedByBufDepReqQ()`.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be removed.
+ * @param chNo the channel number of the specified queue.
+ * @param wayNo the die number of the specified queue.
+ */
 void SelectiveGetFromBlockedByRowAddrDepReqQ(unsigned int reqSlotTag, unsigned int chNo, unsigned int wayNo)
 {
     unsigned int prevReq, nextReq;
@@ -319,6 +421,13 @@ void SelectiveGetFromBlockedByRowAddrDepReqQ(unsigned int reqSlotTag, unsigned i
     blockedReqCnt--;
 }
 
+/**
+ * @brief Add the given request to the NVMe DMA request queue and update its status.
+ *
+ * Similar to `PutToFreeReqQ()`.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be added
+ */
 void PutToNvmeDmaReqQ(unsigned int reqSlotTag)
 {
     if (nvmeDmaReqQ.tailReq != REQ_SLOT_TAG_NONE)
@@ -340,6 +449,19 @@ void PutToNvmeDmaReqQ(unsigned int reqSlotTag)
     nvmeDmaReqQ.reqCnt++;
 }
 
+/**
+ * @brief Move the specified entry from the `nvmeDmaReqQ` to the `freeReqQ`.
+ *
+ * Remove the given request entry from the NVMe DMA request queue, and then insert into
+ * the free request queue.
+ *
+ * NOTE: the function `PutToFreeReqQ()` and its friends won't modify the `prevBlockingReq`
+ * and the `nextBlockingReq` of the specified request entry, therefore after request being
+ * added to free request queue, we should also try to remove the specified request from
+ * the blocking request by calling the function `ReleaseBlockedByBufDepReq()`. //FIXME
+ *
+ * @param reqSlotTag the request pool entry index of the request to be removed
+ */
 void SelectiveGetFromNvmeDmaReqQ(unsigned int reqSlotTag)
 {
     unsigned int prevReq, nextReq;
@@ -372,9 +494,21 @@ void SelectiveGetFromNvmeDmaReqQ(unsigned int reqSlotTag)
     nvmeDmaReqQ.reqCnt--;
 
     PutToFreeReqQ(reqSlotTag);
-    ReleaseBlockedByBufDepReq(reqSlotTag);
+    ReleaseBlockedByBufDepReq(reqSlotTag); // release the request from blocking request if needed
 }
 
+/**
+ * @brief Add the given request to `nandReqQ` of the specified die.
+ *
+ * Similar to `PutToFreeReqQ()`.
+ *
+ * NOTE: we should not only increase the size of the specified request queue, but also
+ * increase the number of uncompleted nand request.
+ *
+ * @param reqSlotTag the request pool entry index of the request to be added.
+ * @param chNo the channel number of the specified queue.
+ * @param wayNo the die number of the specified queue.
+ */
 void PutToNandReqQ(unsigned int reqSlotTag, unsigned chNo, unsigned wayNo)
 {
     if (nandReqQ[chNo][wayNo].tailReq != REQ_SLOT_TAG_NONE)
@@ -397,6 +531,19 @@ void PutToNandReqQ(unsigned int reqSlotTag, unsigned chNo, unsigned wayNo)
     notCompletedNandReqCnt++;
 }
 
+/**
+ * @brief Move the head request of the specified `nandReqQ` queue to `freeReqQ`.
+ *
+ * Similar to `GetFromSliceReqQ()` and `SelectiveGetFromNvmeDmaReqQ()`.
+ *
+ * FIXME: currently just simply choose and remove the head request, the two parameters
+ * `reqStatus` and `reqCode` are both not used.
+ *
+ * @param chNo the target channel
+ * @param wayNo the target way
+ * @param reqStatus the status of the previous request executed on the specified die.       // FIXME: not used
+ * @param reqCode the command code of the request attempt to execute on the specified die.  // FIXME: not used
+ */
 void GetFromNandReqQ(unsigned int chNo, unsigned int wayNo, unsigned int reqStatus, unsigned int reqCode)
 {
     unsigned int reqSlotTag;
