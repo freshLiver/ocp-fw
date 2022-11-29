@@ -366,8 +366,17 @@ void SchedulingNandReqPerCh(unsigned int chNo)
         }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                 functions for adjusting the die state list                 */
+/* -------------------------------------------------------------------------- */
+
 /**
- * This function add NAND request to corresponding NAND operation list before issuing.
+ * @brief Append the specified die to a NAND state list based on the request type of the
+ * given request.
+ *
+ * @param reqSlotTag the request pool entry index of a request.
+ * @param chNo the channel number of the specified die.
+ * @param wayNo the way number of the specified die.
  */
 void PutToNandWayPriorityTable(unsigned int reqSlotTag, unsigned int chNo, unsigned int wayNo)
 {
@@ -386,6 +395,14 @@ void PutToNandWayPriorityTable(unsigned int reqSlotTag, unsigned int chNo, unsig
         assert(!"[WARNING] wrong reqCode [WARNING]");
 }
 
+/**
+ * @brief Append the specified die to the tail of the idle list of its channel.
+ *
+ * NOTE: This function won't change the `reqStatusCheckOpt` and `dieState` flags.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandIdleList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].idleTail != WAY_NONE)
@@ -405,12 +422,18 @@ void PutToNandIdleList(unsigned int chNo, unsigned int wayNo)
 }
 
 /**
- * // FIXME: function name typo
- * // TODO: use var or macro to improve readability
+ * @brief Remove the specified die from the idle list of its channel.
  *
- * If target way is not in the dieState list, reset the idle list.
- * If target way is head/tail node of dieState list, move to head/tail of idle list.
- * Otherwise, remove this way from dieState list.
+ * Since the state lists only records the index of head/tail way in their list, there is
+ * no need to modify the `wayPriority` if the target way is at the body of its idle list.
+ *
+ * NOTE: Like `PutToNandIdleList()`, this function won't change `reqStatusCheckOpt` and
+ * `dieState` too.
+ *
+ * FIXME: function name typo
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
  */
 void SelectivGetFromNandIdleList(unsigned int chNo, unsigned int wayNo)
 {
@@ -421,7 +444,6 @@ void SelectivGetFromNandIdleList(unsigned int chNo, unsigned int wayNo)
             dieStateTablePtr->dieState[chNo][wayNo].nextWay;
         dieStateTablePtr->dieState[chNo][dieStateTablePtr->dieState[chNo][wayNo].nextWay].prevWay =
             dieStateTablePtr->dieState[chNo][wayNo].prevWay;
-        // FIXME: why no need to change the wayPriority
     }
     else if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay == WAY_NONE) &&
              (dieStateTablePtr->dieState[chNo][wayNo].prevWay != WAY_NONE))
@@ -442,6 +464,14 @@ void SelectivGetFromNandIdleList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Append the specified die to the tail of the status report list of its channel.
+ *
+ * Similar to `PutToNandIdleList()` but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandStatusReportList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].statusReportTail != WAY_NONE)
@@ -460,6 +490,16 @@ void PutToNandStatusReportList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Remove the specified die from the status report list of its channel.
+ *
+ * Similar to `SelectivGetFromNandIdleList()`, but with different target list.
+ *
+ * FIXME: function name typo
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void SelectivGetFromNandStatusReportList(unsigned int chNo, unsigned int wayNo)
 {
     if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) &&
@@ -489,6 +529,14 @@ void SelectivGetFromNandStatusReportList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Append the specified die to the tail of the read trigger list of its channel.
+ *
+ * Similar to `PutToNandIdleList()` but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandReadTriggerList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].readTriggerTail != WAY_NONE)
@@ -507,6 +555,14 @@ void PutToNandReadTriggerList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Remove the specified die from the read trigger list of its channel.
+ *
+ * Similar to `SelectivGetFromNandIdleList()`, but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void SelectiveGetFromNandReadTriggerList(unsigned int chNo, unsigned int wayNo)
 {
     if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) &&
@@ -536,6 +592,14 @@ void SelectiveGetFromNandReadTriggerList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Append the specified die to the tail of the write list of its channel.
+ *
+ * Similar to `PutToNandIdleList()` but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandWriteList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].writeTail != WAY_NONE)
@@ -554,6 +618,14 @@ void PutToNandWriteList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Remove the specified die from the write list of its channel.
+ *
+ * Similar to `SelectivGetFromNandIdleList()`, but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void SelectiveGetFromNandWriteList(unsigned int chNo, unsigned int wayNo)
 {
     if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) &&
@@ -583,6 +655,14 @@ void SelectiveGetFromNandWriteList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Append the specified die to the tail of the read transfer list of its channel.
+ *
+ * Similar to `PutToNandIdleList()` but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandReadTransferList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].readTransferTail != WAY_NONE)
@@ -601,6 +681,14 @@ void PutToNandReadTransferList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Remove the specified die from the read transfer list of its channel.
+ *
+ * Similar to `SelectivGetFromNandIdleList()`, but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void SelectiveGetFromNandReadTransferList(unsigned int chNo, unsigned int wayNo)
 {
     if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) &&
@@ -630,6 +718,14 @@ void SelectiveGetFromNandReadTransferList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Append the specified die to the tail of the erase list of its channel.
+ *
+ * Similar to `PutToNandIdleList()` but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandEraseList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].eraseTail != WAY_NONE)
@@ -648,6 +744,14 @@ void PutToNandEraseList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Remove the specified die from the erase list of its channel.
+ *
+ * Similar to `SelectivGetFromNandIdleList()`, but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void SelectiveGetFromNandEraseList(unsigned int chNo, unsigned int wayNo)
 {
     if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) &&
@@ -677,6 +781,14 @@ void SelectiveGetFromNandEraseList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Append the specified die to the tail of the status check list of its channel.
+ *
+ * Similar to `PutToNandIdleList()` but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void PutToNandStatusCheckList(unsigned int chNo, unsigned int wayNo)
 {
     if (wayPriorityTablePtr->wayPriority[chNo].statusCheckTail != WAY_NONE)
@@ -695,6 +807,14 @@ void PutToNandStatusCheckList(unsigned int chNo, unsigned int wayNo)
     }
 }
 
+/**
+ * @brief Remove the specified die from the status check list of its channel.
+ *
+ * Similar to `SelectivGetFromNandIdleList()`, but with different target list.
+ *
+ * @param chNo the channel number of target die
+ * @param wayNo the way number of target die
+ */
 void SelectiveGetFromNandStatusCheckList(unsigned int chNo, unsigned int wayNo)
 {
     if ((dieStateTablePtr->dieState[chNo][wayNo].nextWay != WAY_NONE) &&
@@ -723,6 +843,10 @@ void SelectiveGetFromNandStatusCheckList(unsigned int chNo, unsigned int wayNo)
         wayPriorityTablePtr->wayPriority[chNo].statusCheckTail = WAY_NONE;
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                end of functions for managing die state lists               */
+/* -------------------------------------------------------------------------- */
 
 /**
  * The main function that issue the flash operations to storage controllers.
