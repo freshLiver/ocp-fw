@@ -105,6 +105,13 @@ void InitReqScheduler()
     }
 }
 
+/**
+ * @brief Do schedule until all the requests are done.
+ *
+ * As mentioned in the paper, the NVMe requests have higher priority than NAND requests.
+ * Therefore the function that handles NVMe request `CheckDoneNvmeDmaReq()` should be
+ * called before the function for scheduling NAND requests `SchedulingNandReq()`.
+ */
 void SyncAllLowLevelReqDone()
 {
     while ((nvmeDmaReqQ.headReq != REQ_SLOT_TAG_NONE) || notCompletedNandReqCnt || blockedReqCnt)
@@ -114,6 +121,12 @@ void SyncAllLowLevelReqDone()
     }
 }
 
+/**
+ * @brief Try release request entries by doing scheduling (both NVMe and NAND).
+ *
+ * Similar to `SyncAllLowLevelReqDone()`, but this function will stop at there is at least
+ * one free request entry exists.
+ */
 void SyncAvailFreeReq()
 {
     while (freeReqQ.headReq == REQ_SLOT_TAG_NONE)
