@@ -132,6 +132,9 @@ void SyncReleaseEraseReq(unsigned int chNo, unsigned int wayNo, unsigned int blo
     }
 }
 
+/**
+ * @brief Iteratively do schedule on each channel by calling `SchedulingNandReqPerCh`.
+ */
 void SchedulingNandReq()
 {
     int chNo;
@@ -141,7 +144,21 @@ void SchedulingNandReq()
 }
 
 /**
- * The main function for scheduling NAND requests.
+ * @brief The main function to schedule NAND requests on the specified channel.
+ *
+ * This function can be separated into 3 parts:
+ *
+ * 1. select idle ways which has requests want to execute
+ *
+ * 2. update the request status of each way (second stage status check) and move the die
+ * to the idle list if the request is done.
+ *
+ * 3. update some requests' status (first step status check) and issue requests based on
+ * the predefined flash operation priority.
+ *
+ * Check the inline comments for more detailed explanation.
+ *
+ * @param chNo the channel number for scheduling
  */
 void SchedulingNandReqPerCh(unsigned int chNo)
 {
@@ -159,33 +176,29 @@ void SchedulingNandReqPerCh(unsigned int chNo)
     if (wayPriorityTablePtr->wayPriority[chNo].idleHead != WAY_NONE)
     {
         wayNo = wayPriorityTablePtr->wayPriority[chNo].idleHead;
-
         while (wayNo != WAY_NONE)
         {
             /**
              * Currently no available requests should be executed on this way, but there
-             * may be some requests in the `blockedByRowAddrDepReqQ` instead, try to
-             * release the `blockedByRowAddrDepReqQ` first and check again later.
+             * may be some requests in the `blockedByRowAddrDepReqQ` instead. Try to
+             * release the `blockedByRowAddrDepReqQ` and check again if there are any
+             * requests to do later.
              */
             if (nandReqQ[chNo][wayNo].headReq == REQ_SLOT_TAG_NONE)
                 ReleaseBlockedByRowAddrDepReq(chNo, wayNo);
 
             /**
-             * `PutToNandReqQ` may be called in `ReleaseBlockedByRowAddrDepReq` and change
-             * the `headReq`, so we have to check `headReq` again to make sure there is
-             * really no request to be schedule on this way.
+             * If any blocked request is released in `ReleaseBlockedByRowAddrDepReq()`,
+             * they will be added to the `PutToNandReqQ`.
              *
-             * If there is any NAND request should be scheduled on this way, and schedule
-             * that request on the first idle way by adding to the `NandWayPriorityTable`,
-             * and remove the target way from the idle list of this channel.
-             *
-             * If there is really no request want to use this way, just check next idle
-             * way.
+             * If there is any request should be scheduled on this die, move this die
+             * from idle state list to the state list corresponding to the request type.
+             * Otherwise, there is really no request want to use this die, just skip this
+             * die.
              */
             if (nandReqQ[chNo][wayNo].headReq != REQ_SLOT_TAG_NONE)
             {
                 nextWay = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
-
                 SelectivGetFromNandIdleList(chNo, wayNo);
                 PutToNandWayPriorityTable(nandReqQ[chNo][wayNo].headReq, chNo, wayNo);
                 wayNo = nextWay;
@@ -193,23 +206,20 @@ void SchedulingNandReqPerCh(unsigned int chNo)
             else
             {
                 wayNo = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
-
                 waitWayCnt++;
             }
         }
     }
 
     /**
-     * After all idle ways were checked and these are some requests to do, we now ready
-     * to issue requests to NAND. However, the channel controller of target way may not
-     * ready yet, thus we have to check whether the channel is busy before issuing the
-     * requests to target way.
+     * The most important task of this part is to check the request status (second stage
+     * status check). Base on the request status, move to the die to the idle state list
+     * if its request is done, or back to `statusCheck` list (first stage status check,
+     * check next part for details) if its request not complete yet.
      *
-     * If the target way of a request is ready (not running), just execute the request and
-     * check ??
-     *
-     * Otherwise, just record and skip that request.
-     *
+     * But beside this, we also move the dies that had completed their requests to the
+     * corresponding state list if there is any request should be scheduled on this die,
+     * just like what we did in the previous part, before issuing requests in next part.
      */
     if (wayPriorityTablePtr->wayPriority[chNo].statusReportHead != WAY_NONE)
     {
@@ -221,14 +231,28 @@ void SchedulingNandReqPerCh(unsigned int chNo)
             if (V2FWayReady(readyBusy, wayNo))
             {
                 reqStatus = CheckReqStatus(chNo, wayNo);
-
                 if (reqStatus != REQ_STATUS_RUNNING)
                 {
+                    /**
+                     * Since the previous part had moved all idle ways to the state list
+                     * corresponding to the head request of this die, this die must not
+                     * in `DIE_STATE_IDLE` state.
+                     *
+                     * Also, we had check the request state is not `REQ_STATUS_RUNNING`,
+                     * thus the `ExecuteNandReq()` must bring the die to `DIE_STATE_IDLE`.
+                     */
                     ExecuteNandReq(chNo, wayNo, reqStatus);
                     nextWay = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
-                    SelectivGetFromNandStatusReportList(chNo, wayNo);
 
-                    // TODO: why release again?
+                    /**
+                     * Since the die become idle, now we can try to schedule request on
+                     * this die like what we just did in the previous part, if there is
+                     * any request should be executed on this die.
+                     *
+                     * NOTE: In current implementation, here is the only place to change
+                     * the state a die to IDLE and put it into the idle state list.
+                     */
+                    SelectivGetFromNandStatusReportList(chNo, wayNo);
                     if (nandReqQ[chNo][wayNo].headReq == REQ_SLOT_TAG_NONE)
                         ReleaseBlockedByRowAddrDepReq(chNo, wayNo);
 
@@ -244,9 +268,21 @@ void SchedulingNandReqPerCh(unsigned int chNo)
                 }
                 else if (dieStateTablePtr->dieState[chNo][wayNo].reqStatusCheckOpt == REQ_STATUS_CHECK_OPT_CHECK)
                 {
+                    /**
+                     * If the status shows that this request not finish yet, and the flag
+                     * `reqStatusCheckOpt` is set to `REQ_STATUS_CHECK_OPT_CHECK`, which
+                     * means this request is not READ_TRANSFER since READ_TRANSFER use
+                     * another flag `REQ_STATUS_CHECK_OPT_COMPLETION_FLAG` for checking,
+                     * thus we have to move it back to the `statusCheck` list (first stage
+                     * status check) for the next part to check it again.
+                     *
+                     * Similar to next part, because the `CheckReqStatus()` will turn the
+                     * flag `reqStatusCheckOpt` from `REQ_STATUS_CHECK_OPT_REPORT` to
+                     * `REQ_STATUS_CHECK_OPT_CHECK`, we don't have to manually change the
+                     * flag after/before the die was moved to the `statusCheck` list.
+                     */
                     nextWay = dieStateTablePtr->dieState[chNo][wayNo].nextWay;
                     SelectivGetFromNandStatusReportList(chNo, wayNo);
-
                     PutToNandStatusCheckList(chNo, wayNo);
                     wayNo = nextWay;
                 }
@@ -265,10 +301,49 @@ void SchedulingNandReqPerCh(unsigned int chNo)
     }
 
     /**
-     * At the last, we have to deal with those skipped requests.
+     * In the last part, we now can try to issue the requests based on the priority of
+     * flash operations. (check the paper)
      *
-     * If the controller of target channel is busy, we can't do anything, just skip.
-     * Else,
+     * NOTE: This part reflect the priority of flash operations mentioned in the paper,
+     * therefore DO NOT break the order of these 'if' conditions as long as there is no
+     * need to adjust the priority of flash operations.
+     *
+     * If there is at least one request should be scheduled and their ways and the channel
+     * is not busy, we can issue the requests by calling `ExecuteNandReq()`.
+     *
+     * NOTE: Since some request may make the channel controller busy, we should skip the
+     * remaining requests right away as the channel become busy.
+     *
+     * After the command is issued, we should move the die to the state list `statusCheck`
+     * or `statusReport` based on the request type:
+     *
+     * - For READ_TRIGGER, WRITE, ERASE requests:
+     *
+     *      These types of requests will be moved to the `statusCheck` list as they were
+     *      issued. And next time we entered this part, we will check the status of those
+     *      requests first, since they are in the `statusCheck` list and status check has
+     *      the highest priority.
+     *
+     *      To check the request status, we use the function `CheckReqStatus()` to get the
+     *      requests status of the ways and then move the die to the `statusReport` list.
+     *
+     *      NOTE: the function `CheckReqStatus()` will change the flag `reqStatusCheckOpt`
+     *      to `REQ_STATUS_CHECK_OPT_REPORT`, therefore there is no need to modified the
+     *      flag before/after we move the die to the `statusReport` list.
+     *
+     *      NOTE: Not all the requests' status can be retrieve since the die may be busy.
+     *      Therefore, we only move the dies that successfully retrieved the status to the
+     *      `statusReport` for second stage status checking.
+     *
+     * - For READ_TRANSFER requests:
+     *
+     *      This type of requests will be directly added to the `statusReport` list. in
+     *      other words, the status of READ_TRANSFER requests will not be checked in this
+     *      part.
+     *
+     *      GUESS: The reason that we don't check the status of READ_TRANSFER requests may
+     *      be this type of requests are supposed to be time consumming task, thus we have
+     *      no need to check the status right after they just being issued.
      */
     if (waitWayCnt != USER_WAYS)
         if (!V2FIsControllerBusy(chCtlReg[chNo]))
@@ -282,6 +357,7 @@ void SchedulingNandReqPerCh(unsigned int chNo)
                 {
                     if (V2FWayReady(readyBusy, wayNo))
                     {
+                        // FIXME: called again in second stage status check?? redundant??
                         reqStatus = CheckReqStatus(chNo, wayNo);
 
                         SelectiveGetFromNandStatusCheckList(chNo, wayNo);
@@ -849,18 +925,36 @@ void SelectiveGetFromNandStatusCheckList(unsigned int chNo, unsigned int wayNo)
 /* -------------------------------------------------------------------------- */
 
 /**
- * The main function that issue the flash operations to storage controllers.
+ * @brief Issue a flash operations to the storage controller.
  *
- * In this function, we should check the type of the request to be executed
- * first, then call the corresponding handle function.
+ * To issue a NAND request, we should first allocate a data buffer entry for the request,
+ * though some request may not use the buffer, and then call the corresponding function
+ * defined in the `nsc_driver.c` based on the request type.
  *
- * - READ
- * - READ_TRANSFER
- * - WRITE
- * - ERASE
- * - RESET
+ * Before we issue the request, we should set the `reqStatusCheckOpt` flag of the
+ * specified die based on the request type:
  *
- * // FIXME: why no flush operation??
+ * - for READ_TRANSFER request, set to `REQ_STATUS_CHECK_OPT_COMPLETION_FLAG`, which means
+ * the we should use the complete flag table to determine if this request is done. Beside
+ * checking the status, this flag also used for distinguishing between READ_TRANSFER and
+ * other flash operations, since the ECC result may need to be checked, check the function
+ * `CheckReqStatus()` for details.
+ *
+ * - for RESET, SET_FEATURE request, set to `REQ_STATUS_CHECK_OPT_NONE`, which means the
+ * request won't update the status table, and we can just use the busy/ready status to
+ * determine whether this request is done.
+ *
+ * - for READ_TRIGGER, WRITE, ERASE request, set to `REQ_STATUS_CHECK_OPT_CHECK`, but this
+ * flag is a little bit complicated; this flag actually represent the first stage status
+ * check, and this flag may be updated to the `REQ_STATUS_CHECK_OPT_REPORT`, which is used
+ * to represent the second stage status check, if the function `CheckReqStatus()` called
+ * during the scheduling process. Check `SchedulingNandReqPerCh()` and `CheckReqStatus()`
+ * for details.
+ *
+ * FIXME: replace the condition statements with switch statement
+ *
+ * @param chNo the channel number of the targe die to issue the NAND request.
+ * @param wayNo the way number of the targe die to issue the NAND request.
  */
 void IssueNandReq(unsigned int chNo, unsigned int wayNo)
 {
@@ -875,7 +969,6 @@ void IssueNandReq(unsigned int chNo, unsigned int wayNo)
     dataBufAddr      = (void *)GenerateDataBufAddr(reqSlotTag);
     spareDataBufAddr = (void *)GenerateSpareDataBufAddr(reqSlotTag);
 
-    // TODO: replace the condition statements with switch statement
     if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
     {
         dieStateTablePtr->dieState[chNo][wayNo].reqStatusCheckOpt = REQ_STATUS_CHECK_OPT_CHECK;
@@ -1077,6 +1170,19 @@ unsigned int GenerateSpareDataBufAddr(unsigned int reqSlotTag)
         assert(!"[WARNING] wrong reqType [WARNING]");
 }
 
+/**
+ * @brief Update the die status and return the request status.
+ *
+ * NOTE: This function has a side effect: the flag `reqStatusCheckOpt` of this die may be
+ * updated from `REQ_STATUS_CHECK_OPT_CHECK`, which means the first stage status check, to
+ * `REQ_STATUS_CHECK_OPT_REPORT`, which means the second stage status check, or changed
+ * from `REQ_STATUS_CHECK_OPT_REPORT` to `REQ_STATUS_CHECK_OPT_CHECK`, so this function
+ * should be used carefully.
+ *
+ * @param chNo the target channel number to check the status.
+ * @param wayNo the target die number to check the status.
+ * @return unsigned int the status of the request being executed on this die.
+ */
 unsigned int CheckReqStatus(unsigned int chNo, unsigned int wayNo)
 {
     unsigned int reqSlotTag, completeFlag, statusReport, errorInfo, readyBusy, status;
@@ -1164,8 +1270,48 @@ unsigned int CheckEccErrorInfo(unsigned int chNo, unsigned int wayNo)
     return ERROR_INFO_FAIL;
 }
 
-/** //TODO
- * Before executing requests, we should do some
+/**
+ * @brief Update die state and issue new NAND requests if the die is in IDLE state.
+ *
+ * If the die state is IDLE, we can just issue new NAND request on that die. But if the
+ * state is EXE, we should do different thing based on the request status:
+ *
+ * - previous request is RUNNING
+ *
+ *      Nothing to do, just wait for it.
+ *
+ * - previous request is DONE
+ *
+ *      Before we set the die state to IDLE, we need to do something based on its request
+ *      type:
+ *
+ *      - if previous request is READ_TRIGGER, just convert to READ_TRANSFER
+ *      - otherwise, removed from the request queue and reset the retry count
+ *
+ *      NOTE: if a command should be split into some continuous requests, we should modify
+ *      this to ensure other requests will not be executed before these requests finished.
+ *      Take READ for example, if a READ_TRIGGER finished, the data is still in its die
+ *      register, thus we should make sure the READ_TRANSFER to be the next request that
+ *      will be executed on this die to prevent the die register from being overwritten.
+ *
+ * - previous request is FAIL
+ *
+ *      If the request failed, there are different things to do based on the request type.
+ *      For READ_TRIGGER and READ_TRANSFER, retry the request (from READ_TRIGGER state)
+ *      until reaching the retry limitation. For other requests, just mark as bad block.
+ *
+ *
+ * - previous request is WARNING
+ *
+ *      This means ECC failed, report bad block then make die IDLE and reset retry count
+ *
+ * TODO: bad block and ECC related handling
+ *
+ * NOTE: in current implementation, this is the only function that changes the dieState.
+ *
+ * @param chNo the channel number which should exec this request
+ * @param wayNo the way number which should exec this request
+ * @param reqStatus the status of the previous request executed on the specified die
  */
 void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatus)
 {
