@@ -355,7 +355,7 @@ void SchedulingNandReqPerCh(unsigned int chNo)
      *      part.
      *
      *      GUESS: The reason that we don't check the status of READ_TRANSFER requests may
-     *      be this type of requests are supposed to be time consumming task, thus we have
+     *      be this type of requests are supposed to be time consuming task, thus we have
      *      no need to check the status right after they just being issued.
      */
     if (waitWayCnt != USER_WAYS)
