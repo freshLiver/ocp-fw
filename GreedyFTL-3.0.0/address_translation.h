@@ -70,29 +70,40 @@
 #define GET_FREE_BLOCK_NORMAL 0x0
 #define GET_FREE_BLOCK_GC     0x1
 
-#define BLOCK_STATE_NORMAL 0
-#define BLOCK_STATE_BAD    1
+#define BLOCK_STATE_NORMAL 0 // this block is not bad block
+#define BLOCK_STATE_BAD    1 // this block is bad block
 
-#define DIE_STATE_BAD_BLOCK_TABLE_NOT_EXIST 0
-#define DIE_STATE_BAD_BLOCK_TABLE_EXIST     1
+#define DIE_STATE_BAD_BLOCK_TABLE_NOT_EXIST 0 // no bbt, do build and persist the bbt (initialize)
+#define DIE_STATE_BAD_BLOCK_TABLE_EXIST     1 // bbt exists, don't build and persist the bbt (initialize)
+#define DIE_STATE_BAD_BLOCK_TABLE_HOLD      2 // no unpersisted bad block, don't update the bbt (runtime)
+#define DIE_STATE_BAD_BLOCK_TABLE_UPDATE    3 // unpersisted bad blocks exist, do update the bbt (runtime)
 
-#define BAD_BLOCK_TABLE_MAKER_IDLE       0
-#define BAD_BLOCK_TABLE_MAKER_TRIGGER    1
-#define DIE_STATE_BAD_BLOCK_TABLE_HOLD   2
-#define DIE_STATE_BAD_BLOCK_TABLE_UPDATE 3
+#define BAD_BLOCK_TABLE_MAKER_IDLE    0 // no need to rebuilt to bbt
+#define BAD_BLOCK_TABLE_MAKER_TRIGGER 1 // rebuild the bbt, only used in initialization
 
-#define CLEAN_DATA_IN_BYTE 0xff
+#define CLEAN_DATA_IN_BYTE 0xff // the bit pattern for determining bad block
 
+/* how many pages are used for storing the bbt of that die */
 #define USED_PAGES_FOR_BAD_BLOCK_TABLE_PER_DIE (TOTAL_BLOCKS_PER_DIE / BYTES_PER_DATA_REGION_OF_PAGE + 1)
 #define DATA_SIZE_OF_BAD_BLOCK_TABLE_PER_DIE   (TOTAL_BLOCKS_PER_DIE)
-#define START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK                                                                    \
-    (1) // bad block table begins at second page for preserving a bad block mark of the block allocated to save bad
-        // block table
 
-#define BBT_INFO_GROWN_BAD_UPDATE_NONE   0
-#define BBT_INFO_GROWN_BAD_UPDATE_BOOKED 1
+/**
+ * @brief The start physical page number that stored the bbt of this die.
+ *
+ * The first page will be used for checking the bad block mark, so start putting the bbt
+ * from second page.
+ *
+ * @note the bad block table should be saved at lsb pages
+ */
+#define START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK (1)
 
-// virtual slice address to virtual organization translation
+#define BBT_INFO_GROWN_BAD_UPDATE_NONE   0 // the bbt no need to be updated
+#define BBT_INFO_GROWN_BAD_UPDATE_BOOKED 1 // the bbt should be updated
+
+/* -------------------------------------------------------------------------- */
+/*                NAND Address Translation (Virtual -> Virtual)               */
+/* -------------------------------------------------------------------------- */
+
 #define Vsa2VdieTranslation(virtualSliceAddr)   ((virtualSliceAddr) % (USER_DIES))
 #define Vsa2VblockTranslation(virtualSliceAddr) (((virtualSliceAddr) / (USER_DIES)) / (SLICES_PER_BLOCK))
 #define Vsa2VpageTranslation(virtualSliceAddr)  (((virtualSliceAddr) / (USER_DIES)) % (SLICES_PER_BLOCK))
@@ -178,25 +189,39 @@ typedef struct _FRRE_BLOCK_ALLOCATION_LIST
     unsigned int reserved0 : 16;
 } FRRE_BLOCK_ALLOCATION_LIST, *P_FRRE_BLOCK_ALLOCATION_LIST;
 
+/**
+ * @brief The bad block table for this die.
+ */
 typedef struct _BAD_BLOCK_TABLE_INFO_ENTRY
 {
-    unsigned int phyBlock : 16;
-    unsigned int grownBadUpdate : 1;
+    unsigned int phyBlock : 16;      // which block in this die contains the bbt
+    unsigned int grownBadUpdate : 1; // whether the bbt of this die should be updated
     unsigned int reserved0 : 15;
 } BAD_BLOCK_TABLE_INFO_ENTRY, *P_BAD_BLOCK_TABLE_ENTRY;
 
+/**
+ * @brief The bad block tables.
+ */
 typedef struct _BAD_BLOCK_TABLE_INFO_MAP
 {
     BAD_BLOCK_TABLE_INFO_ENTRY bbtInfo[USER_DIES];
 } BAD_BLOCK_TABLE_INFO_MAP, *P_BAD_BLOCK_TABLE_INFO_MAP;
 
+/**
+ * @brief The metadata of the physical block.
+ */
 typedef struct _PHY_BLOCK_ENTRY
 {
+    /* the origin block was remapped to this physical block */
     unsigned int remappedPhyBlock : 16;
+    /* the origin block is a bad block, check the remapped block */
     unsigned int bad : 1;
     unsigned int reserved0 : 15;
 } PHY_BLOCK_ENTRY, *P_PHY_BLOCK_ENTRY;
 
+/**
+ * @brief The metadata table for all the physical blocks.
+ */
 typedef struct _PHY_BLOCK_MAP
 {
     PHY_BLOCK_ENTRY phyBlock[USER_DIES][TOTAL_BLOCKS_PER_DIE];

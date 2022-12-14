@@ -96,15 +96,29 @@ void InitSliceMap()
     }
 }
 
+/**
+ * @brief Try to remap the bad blocks in the main block space.
+ *
+ * If the number of user blocks is configured as less than the number of total blocks on
+ * each die, there may be some redundant blocks can be used for replacing the bad blocks
+ * in the user blocks.
+ *
+ * Therefore, this function will sequentially search the redundant (reserved) blocks on
+ * each die and try to replace the bad block in the user blocks on that die with the
+ * reserved blocks.
+ *
+ * @bug use array to simplify lun0 and lun1
+ */
 void RemapBadBlock()
 {
     unsigned int blockNo, dieNo, remapFlag, maxBadBlockCount;
-    unsigned int reservedBlockOfLun0[USER_DIES];
-    unsigned int reservedBlockOfLun1[USER_DIES];
-    unsigned int badBlockCount[USER_DIES];
+    unsigned int reservedBlockOfLun0[USER_DIES]; // PBA of first reserved block on lun 0
+    unsigned int reservedBlockOfLun1[USER_DIES]; // PBA of first reserved block on lun 1
+    unsigned int badBlockCount[USER_DIES];       // non-remmappable blocks on this die
 
     xil_printf("Bad block remapping start...\r\n");
 
+    // view the blocks after user blocks as reserved blocks for remapping
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
         reservedBlockOfLun0[dieNo] = USER_BLOCKS_PER_LUN;
@@ -121,6 +135,7 @@ void RemapBadBlock()
             {
                 if (reservedBlockOfLun0[dieNo] < TOTAL_BLOCKS_PER_LUN)
                 {
+                    // sequentially find a reserved non-bad block to replace the bad block
                     remapFlag = 1;
                     while (phyBlockMapPtr->phyBlock[dieNo][reservedBlockOfLun0[dieNo]].bad)
                     {
@@ -132,6 +147,7 @@ void RemapBadBlock()
                         }
                     }
 
+                    // we found a block for replacing the bad block
                     if (remapFlag)
                     {
                         phyBlockMapPtr->phyBlock[dieNo][blockNo].remappedPhyBlock = reservedBlockOfLun0[dieNo];
@@ -198,6 +214,7 @@ void RemapBadBlock()
     maxBadBlockCount = 0;
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
+        xil_printf("[WARNING !!!] There are %d bad blocks on Die %d.\r\n", dieNo);
         if (maxBadBlockCount < badBlockCount[dieNo])
             maxBadBlockCount = badBlockCount[dieNo];
     }
@@ -258,6 +275,21 @@ void InitCurrentBlockOfDieMap()
     }
 }
 
+/**
+ * @brief Read the pages that should contain the bad block table.
+ *
+ * The bbt of that die is stored in the LSB page (or pages) of the block specified by the
+ * `BAD_BLOCK_TABLE_INFO_ENTRY::phyBlock`, which is default to 0 in `InitAddressMap()`.
+ *
+ * Each block on this die (including the extended blocks), use 1 Byte to store the bad
+ * block info, so we have to read `TOTAL_BLOCKS_PER_DIE / PAGE_SIZE_IN_BYTES` pages from
+ * the flash.
+ *
+ * @todo why ECC and row addr dependency can be turned off ??
+ *
+ * @param tempBbtBufAddr the addresses of the bbt of each die.
+ * @param tempBbtBufEntrySize the size of the data and metadata region of a page.
+ */
 void ReadBadBlockTable(unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEntrySize)
 {
     unsigned int tempPage, reqSlotTag, dieNo;
@@ -265,8 +297,7 @@ void ReadBadBlockTable(unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEnt
 
     loop     = 0;
     dataSize = DATA_SIZE_OF_BAD_BLOCK_TABLE_PER_DIE;
-    tempPage =
-        PlsbPage2VpageTranslation(START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK); // bad block table is saved at lsb pages
+    tempPage = PlsbPage2VpageTranslation(START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK);
 
     while (dataSize > 0)
     {
@@ -298,9 +329,35 @@ void ReadBadBlockTable(unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEnt
         dataSize -= BYTES_PER_DATA_REGION_OF_PAGE;
     }
 
+    xil_printf("[INFO] %s: bbt size: %d Bytes (%d pages) per die.\r\n", __FUNCTION__, dataSize, loop);
     SyncAllLowLevelReqDone();
 }
 
+/**
+ * @brief Build the bbt for those dies whose bbt doesn't exist.
+ *
+ * To determine whether a block is bad block, we should check 4 bytes in that block:
+ *
+ * - The first byte of the data region of the first page in this block
+ * - The first byte of the data region of the last page in this block
+ * - The first byte of the metadata region of the first page in this block
+ * - The first byte of the metadata region of the last page in this block
+ *
+ * If only of the 4 bytes are not 0xFF, we can view this block as bad block.
+ *
+ * @todo why check these 4 bytes, why ECC and row addr dep off?
+ * @todo the update in the second for is redundant, it can be merged to next part
+ *
+ * @warning `tempBbtBufEntrySize` and `tempReadBufEntrySize` not used
+ *
+ * @bug `blockChecker` not initialized
+ *
+ * @param dieState the flags that indicate whether the bbt of that die should be rebuilt.
+ * @param tempBbtBufAddr the addresses of the bbt of each die.
+ * @param tempBbtBufEntrySize the size of the data and metadata region of a page.
+ * @param tempReadBufAddr the buffer addresses for storing the pages to be read.
+ * @param tempReadBufEntrySize the size of a whole page (data + metadata + ECC).
+ */
 void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEntrySize,
                   unsigned int tempReadBufAddr[], unsigned int tempReadBufEntrySize)
 {
@@ -310,9 +367,14 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
     unsigned char *markPointer1;
     unsigned char *bbtUpdater;
 
-    // check bad block mark of each block
+    /**
+     * Check all the blocks on the SSD
+     *
+     * @note Check multiple dies at the same time to speed up and reduce the buffer size.
+     */
     for (phyBlockNo = 0; phyBlockNo < TOTAL_BLOCKS_PER_DIE; phyBlockNo++)
     {
+        // Read the first page of the specified block of each die
         for (dieNo = 0; dieNo < USER_DIES; dieNo++)
             if (!dieState[dieNo])
             {
@@ -338,9 +400,9 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
 
                 SelectLowLevelReqQ(reqSlotTag);
             }
-
         SyncAllLowLevelReqDone();
 
+        // Read the last page of the specified block of each die if needed
         for (dieNo = 0; dieNo < USER_DIES; dieNo++)
             if (!dieState[dieNo])
             {
@@ -381,6 +443,7 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
 
         SyncAllLowLevelReqDone();
 
+        // determine whether these blocks are bad blocks and update the bbt
         for (dieNo = 0; dieNo < USER_DIES; dieNo++)
             if (!dieState[dieNo])
             {
@@ -396,6 +459,7 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
                         blockChecker[dieNo] = BLOCK_STATE_BAD;
                     }
 
+                // update the bbt this block
                 bbtUpdater  = (unsigned char *)(tempBbtBufAddr[dieNo] + phyBlockNo);
                 *bbtUpdater = blockChecker[dieNo];
                 phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].bad = blockChecker[dieNo];
@@ -403,6 +467,17 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
     }
 }
 
+/**
+ * @brief Persist the newly created bbt for those dies whose bbt not exists.
+ *
+ * Similar to ReadBadBlockTable, but now we have to write the bbt to the pages.
+ *
+ * @note The bbt should be saved at lsb pages.
+ *
+ * @param dieState the flags that indicate whether the bbt of that die should be rebuilt.
+ * @param tempBbtBufAddr the addresses of the bbt of each die.
+ * @param tempBbtBufEntrySize the size of the data and metadata region of a page.
+ */
 void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEntrySize)
 {
     unsigned int dieNo, reqSlotTag;
@@ -410,8 +485,7 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
 
     loop     = 0;
     dataSize = DATA_SIZE_OF_BAD_BLOCK_TABLE_PER_DIE;
-    tempPage =
-        PlsbPage2VpageTranslation(START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK); // bad block table is saved at lsb pages
+    tempPage = PlsbPage2VpageTranslation(START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK);
 
     while (dataSize > 0)
     {
@@ -419,6 +493,7 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
             if ((dieState[dieNo] == DIE_STATE_BAD_BLOCK_TABLE_NOT_EXIST) ||
                 (dieState[dieNo] == DIE_STATE_BAD_BLOCK_TABLE_UPDATE))
             {
+                /* before writing the bbt to flash, we should do erase first. */
                 if (loop == 0)
                 {
                     reqSlotTag = GetFromFreeReqQ();
@@ -463,7 +538,7 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
             }
 
         loop++;
-        dataSize++;
+        dataSize++; // FIXME: tempPage ????
         dataSize -= BYTES_PER_DATA_REGION_OF_PAGE;
     }
 
@@ -475,13 +550,37 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
                        dieNo / USER_CHANNELS);
 }
 
+/**
+ * @brief Read the bbt from flash and re-create if not exists.
+ *
+ * This function is used for checking and recover the bad block table from the flash.
+ *
+ * To do this, we have several things to do:
+ *
+ * 1. Read the flash pages that is used for storing the bbt info
+ *
+ * 2. Check whether the specific pages contains the bbt info
+ *
+ *      a. if bbt info exists, check the bad blocks in this die.
+ *      b. otherwise, mark the bbt this die should be rebuilt.
+ *
+ * 3. Rebuilt bbt if needed
+ *
+ *      1. read all the blocks in the target dies
+ *      2. determine whether those blocks are bad blocks
+ *      3. update the temp bbt
+ *
+ * 4. Persist the newly created bbt to the flash
+ *
+ * @param tempBufAddr the base address for buffering the pages that contain the bbt.
+ */
 void RecoverBadBlockTable(unsigned int tempBufAddr)
 {
     unsigned int dieNo, phyBlockNo, bbtMaker, tempBbtBufBaseAddr, tempBbtBufEntrySize, tempReadBufBaseAddr,
         tempReadBufEntrySize;
-    unsigned int tempBbtBufAddr[USER_DIES];
-    unsigned int tempReadBufAddr[USER_DIES];
-    unsigned char dieState[USER_DIES];
+    unsigned int tempBbtBufAddr[USER_DIES];  // buffer addresses for storing the bbt pages
+    unsigned int tempReadBufAddr[USER_DIES]; // buffer addresses for finding bad blocks
+    unsigned char dieState[USER_DIES];       // whether the bbt of this die should be rebuilt
     unsigned char *bbtTableChecker;
 
     // data buffer allocation
@@ -497,7 +596,7 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
         tempReadBufAddr[dieNo] = tempReadBufBaseAddr + dieNo * tempReadBufEntrySize;
     }
 
-    // read bad block tables
+    // read the bbt of each die into bbt buffer
     ReadBadBlockTable(tempBbtBufAddr, tempBbtBufEntrySize);
 
     // check bad block tables
@@ -506,6 +605,15 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
     {
         bbtTableChecker = (unsigned char *)(tempBbtBufAddr[dieNo]);
 
+        /**
+         * Each block on this die use 1 byte to store the bad block info, but only use 1
+         * bit to indicate whether that block is a bad block. So here just determine if
+         * the bbt exists by checking the first byte.
+         *
+         * @todo use bitmap to record bad blocks
+         *
+         * @warning why not use magic number to make sure the data is valid ??
+         */
         if ((*bbtTableChecker == BLOCK_STATE_NORMAL) || (*bbtTableChecker == BLOCK_STATE_BAD))
         {
             xil_printf("[ bad block table of ch %d way %d exists.]\r\n", Vdie2PchTranslation(dieNo),
@@ -534,19 +642,21 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
         }
     }
 
-    // if bad block table does not exist in some dies, make new bad block table for each die having no bad block
-    // table
+    // Create bbt for those dies whose bbt not found.
     if (bbtMaker == BAD_BLOCK_TABLE_MAKER_TRIGGER)
     {
         FindBadBlock(dieState, tempBbtBufAddr, tempBbtBufEntrySize, tempReadBufAddr, tempReadBufEntrySize);
         SaveBadBlockTable(dieState, tempBbtBufAddr, tempBbtBufEntrySize);
     }
 
-    // grown bad update flag initialization
+    // bbt initialization done, no need to update the bbt until new bad block found
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
         bbtInfoMapPtr->bbtInfo[dieNo].grownBadUpdate = BBT_INFO_GROWN_BAD_UPDATE_NONE;
 }
 
+/**
+ * @brief Erase all the blocks on user dies and wait until done.
+ */
 void EraseTotalBlockSpace()
 {
     unsigned int blockNo, dieNo, reqSlotTag;
@@ -577,6 +687,9 @@ void EraseTotalBlockSpace()
     xil_printf("Done.\r\n");
 }
 
+/**
+ * @brief Erase all the non-bad main blocks on user dies and wait until done.
+ */
 void EraseUserBlockSpace()
 {
     unsigned int blockNo, dieNo, reqSlotTag;
@@ -611,21 +724,35 @@ void InitBlockDieMap()
     unsigned char eraseFlag = 1;
 
     xil_printf("Press 'X' to re-make the bad block table.\r\n");
-    if (inbyte() == 'X')
+    // char input = inbyte();
+    char input = 'X';
+    if (input == 'X')
     {
+        xil_printf("[WARNING!!!] Start re-making bad block table\r\n");
         EraseTotalBlockSpace();
         eraseFlag = 0;
     }
+    else
+    {
+        xil_printf("[WARNING!!!] Skip re-making bad block table\r\n");
+    }
 
+    // empty the free block list of each die
     InitDieMap();
 
-    // make bad block table
+    // read bbt from flash [, create bbt, persist new bbt to flash]
     RecoverBadBlockTable(RESERVED_DATA_BUFFER_BASE_ADDR);
 
-    // to prevent accessing bbtBlock by host
+    /**
+     * Since the block specified by `BAD_BLOCK_TABLE_INFO_ENTRY::phyBlock` is used for
+     * storing the bbt of that die, so we have to mark that block bad and let it to be
+     * remapped to another block for using.
+     *
+     * And because we have at least one bad block on each die, the remapping process thus
+     * should not be skipped.
+     */
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
         phyBlockMapPtr->phyBlock[dieNo][bbtInfoMapPtr->bbtInfo[dieNo].phyBlock].bad = 1;
-
     RemapBadBlock();
 
     InitBlockMap();
@@ -880,13 +1007,26 @@ unsigned int GetFromFbList(unsigned int dieNo, unsigned int getFreeBlockOption) 
     return evictedBlockNo;
 }
 
+/**
+ * @brief Mark the given physical block bad block and update the bbt later.
+ *
+ * @param dieNo the die number of the given block.
+ * @param phyBlockNo the physical address of the block to be marked as bad block.
+ */
 void UpdatePhyBlockMapForGrownBadBlock(unsigned int dieNo, unsigned int phyBlockNo)
 {
     phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].bad = BLOCK_STATE_BAD;
-
-    bbtInfoMapPtr->bbtInfo[dieNo].grownBadUpdate = BBT_INFO_GROWN_BAD_UPDATE_BOOKED;
+    bbtInfoMapPtr->bbtInfo[dieNo].grownBadUpdate    = BBT_INFO_GROWN_BAD_UPDATE_BOOKED;
 }
 
+/**
+ * @brief Update the bad block table and persist to the specified block.
+ *
+ * A little bit similar to `FindBadBlock()`, but this function use the bad block flag to
+ * mark bad blocks, instead of reading the bad block marks.
+ *
+ * @param tempBufAddr the base address of the bad block tables.
+ */
 void UpdateBadBlockTableForGrownBadBlock(unsigned int tempBufAddr)
 {
     unsigned int dieNo, phyBlockNo, tempBbtBufBaseAddr, tempBbtBufEntrySize;
