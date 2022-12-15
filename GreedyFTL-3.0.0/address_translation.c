@@ -214,7 +214,8 @@ void RemapBadBlock()
     maxBadBlockCount = 0;
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
-        xil_printf("[WARNING !!!] There are %d bad blocks on Die %d.\r\n", dieNo);
+        xil_printf("[WARNING!!!] There are %d bad blocks on Ch %d Way %d.\r\n", badBlockCount[dieNo],
+                   Vdie2PchTranslation(dieNo), Vdie2PwayTranslation(dieNo));
         if (maxBadBlockCount < badBlockCount[dieNo])
             maxBadBlockCount = badBlockCount[dieNo];
     }
@@ -329,7 +330,7 @@ void ReadBadBlockTable(unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEnt
         dataSize -= BYTES_PER_DATA_REGION_OF_PAGE;
     }
 
-    xil_printf("[INFO] %s: bbt size: %d Bytes (%d pages) per die.\r\n", __FUNCTION__, dataSize, loop);
+    xil_printf("[INFO] %s: bbt size: %d pages per die.\r\n", __FUNCTION__, loop);
     SyncAllLowLevelReqDone();
 }
 
