@@ -51,59 +51,93 @@
 #include "xparameters.h"
 #include "nvme/nvme.h"
 
-// checks NSC connection, initializes base address
+/* -------------------------------------------------------------------------- */
+/*                   NAND Storage Controller Configurations                   */
+/* -------------------------------------------------------------------------- */
+
 #ifdef XPAR_TIGER4NSC_7_BASEADDR
 #define NSC_7_CONNECTED 1
 #define NSC_7_BASEADDR  XPAR_TIGER4NSC_7_BASEADDR
+#elif XPAR_T4NFC_HLPER_7_BASEADDR
+#define NSC_7_CONNECTED 1
+#define NSC_7_BASEADDR  XPAR_T4NFC_HLPER_7_BASEADDR
 #else
 #define NSC_7_CONNECTED 0
 #define NSC_7_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_6_BASEADDR
 #define NSC_6_CONNECTED 1
 #define NSC_6_BASEADDR  XPAR_TIGER4NSC_6_BASEADDR
+#elif XPAR_T4NFC_HLPER_6_BASEADDR
+#define NSC_6_CONNECTED 1
+#define NSC_6_BASEADDR  XPAR_T4NFC_HLPER_6_BASEADDR
 #else
 #define NSC_6_CONNECTED 0
 #define NSC_6_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_5_BASEADDR
 #define NSC_5_CONNECTED 1
 #define NSC_5_BASEADDR  XPAR_TIGER4NSC_5_BASEADDR
+#elif XPAR_T4NFC_HLPER_5_BASEADDR
+#define NSC_5_CONNECTED 1
+#define NSC_5_BASEADDR  XPAR_T4NFC_HLPER_5_BASEADDR
 #else
 #define NSC_5_CONNECTED 0
 #define NSC_5_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_4_BASEADDR
 #define NSC_4_CONNECTED 1
 #define NSC_4_BASEADDR  XPAR_TIGER4NSC_4_BASEADDR
+#elif XPAR_T4NFC_HLPER_4_BASEADDR
+#define NSC_4_CONNECTED 1
+#define NSC_4_BASEADDR  XPAR_T4NFC_HLPER_4_BASEADDR
 #else
 #define NSC_4_CONNECTED 0
 #define NSC_4_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_3_BASEADDR
 #define NSC_3_CONNECTED 1
 #define NSC_3_BASEADDR  XPAR_TIGER4NSC_3_BASEADDR
+#elif XPAR_T4NFC_HLPER_3_BASEADDR
+#define NSC_3_CONNECTED 1
+#define NSC_3_BASEADDR  XPAR_T4NFC_HLPER_3_BASEADDR
 #else
 #define NSC_3_CONNECTED 0
 #define NSC_3_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_2_BASEADDR
 #define NSC_2_CONNECTED 1
 #define NSC_2_BASEADDR  XPAR_TIGER4NSC_2_BASEADDR
+#elif XPAR_T4NFC_HLPER_2_BASEADDR
+#define NSC_2_CONNECTED 1
+#define NSC_2_BASEADDR  XPAR_T4NFC_HLPER_2_BASEADDR
 #else
 #define NSC_2_CONNECTED 0
 #define NSC_2_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_1_BASEADDR
 #define NSC_1_CONNECTED 1
 #define NSC_1_BASEADDR  XPAR_TIGER4NSC_1_BASEADDR
+#elif XPAR_T4NFC_HLPER_1_BASEADDR
+#define NSC_1_CONNECTED 1
+#define NSC_1_BASEADDR  XPAR_T4NFC_HLPER_1_BASEADDR
 #else
 #define NSC_1_CONNECTED 0
 #define NSC_1_BASEADDR  0
 #endif
+
 #ifdef XPAR_TIGER4NSC_0_BASEADDR
 #define NSC_0_CONNECTED 1
 #define NSC_0_BASEADDR  XPAR_TIGER4NSC_0_BASEADDR
+#elif XPAR_T4NFC_HLPER_0_BASEADDR
+#define NSC_0_CONNECTED 1
+#define NSC_0_BASEADDR  XPAR_T4NFC_HLPER_0_BASEADDR
 #else
 #define NSC_0_CONNECTED 0
 #define NSC_0_BASEADDR  0
