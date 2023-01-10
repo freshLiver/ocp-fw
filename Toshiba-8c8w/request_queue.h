@@ -45,54 +45,54 @@
 #ifndef REQUEST_QUEUE_H_
 #define REQUEST_QUEUE_H_
 
+// TODO these structures are exactly the same, should be simplified into 1 structure
 
 typedef struct _FREE_REQUEST_QUEUE
 {
-	unsigned int headReq : 16;
-	unsigned int tailReq : 16;
-	unsigned int reqCnt : 16;
-	unsigned int reserved0 : 16;
+    unsigned int headReq : 16;
+    unsigned int tailReq : 16;
+    unsigned int reqCnt : 16;
+    unsigned int reserved0 : 16;
 } FREE_REQUEST_QUEUE, *P_FREE_REQUEST_QUEUE;
 
 typedef struct _SLICE_REQUEST_QUEUE
 {
-	unsigned int headReq : 16;
-	unsigned int tailReq : 16;
-	unsigned int reqCnt : 16;
-	unsigned int reserved0 : 16;
+    unsigned int headReq : 16;
+    unsigned int tailReq : 16;
+    unsigned int reqCnt : 16;
+    unsigned int reserved0 : 16;
 } SLICE_REQUEST_QUEUE, *P_SLICE_REQUEST_QUEUE;
 
 typedef struct _BLOCKED_BY_BUFFER_DEPENDENCY_REQUEST_QUEUE
 {
-	unsigned int headReq : 16;
-	unsigned int tailReq : 16;
-	unsigned int reqCnt : 16;
-	unsigned int reserved0 : 16;
+    unsigned int headReq : 16;
+    unsigned int tailReq : 16;
+    unsigned int reqCnt : 16;
+    unsigned int reserved0 : 16;
 } BLOCKED_BY_BUFFER_DEPENDENCY_REQUEST_QUEUE, *P_BLOCKED_BY_BUFFER_DEPENDENCY_REQUEST_QUEUE;
 
 typedef struct _BLOCKED_BY_ROW_ADDR_DEPENDENCY_REQUEST_QUEUE
 {
-	unsigned int headReq : 16;
-	unsigned int tailReq : 16;
-	unsigned int reqCnt : 16;
-	unsigned int reserved0 : 16;
+    unsigned int headReq : 16;
+    unsigned int tailReq : 16;
+    unsigned int reqCnt : 16;
+    unsigned int reserved0 : 16;
 } BLOCKED_BY_ROW_ADDR_DEPENDENCY_REQUEST_QUEUE, *PBLOCKED_BY_ROW_ADDR_DEPENDENCY_REQUEST_QUEUE;
 
 typedef struct _NVME_DMA_REQUEST_QUEUE
 {
-	unsigned int headReq : 16;
-	unsigned int tailReq : 16;
-	unsigned int reqCnt : 16;
-	unsigned int reserved0 : 16;
+    unsigned int headReq : 16;
+    unsigned int tailReq : 16;
+    unsigned int reqCnt : 16;
+    unsigned int reserved0 : 16;
 } NVME_DMA_REQUEST_QUEUE, *P_NVME_DMA_REQUEST_QUEUE;
 
 typedef struct _NAND_REQUEST_QUEUE
 {
-	unsigned int headReq : 16;
-	unsigned int tailReq : 16;
-	unsigned int reqCnt : 16;
-	unsigned int reserved0 : 16;
+    unsigned int headReq : 16;
+    unsigned int tailReq : 16;
+    unsigned int reqCnt : 16;
+    unsigned int reserved0 : 16;
 } NAND_REQUEST_QUEUE, *P_NAND_REQUEST_QUEUE;
-
 
 #endif /* REQUEST_QUEUE_H_ */

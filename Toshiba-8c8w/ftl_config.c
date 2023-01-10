@@ -130,7 +130,7 @@ void InitChCtlReg()
  *
  * 1. `REQ_CODE_RESET`:
  *
- *      //TODO
+ *      @todo
  *
  * 2. `REQ_CODE_SET_FEATURE`:
  *
@@ -224,6 +224,8 @@ void InitNandArray()
  *
  * 1. the geometry of flash memory doesn't exceed the limit of flash controller
  * 2. there is no overlap in the memory map
+ *
+ * @warning only allow SLC mode ?
  */
 void CheckConfigRestriction()
 {
@@ -234,7 +236,6 @@ void CheckConfigRestriction()
         assert(!"[WARNING] Configuration Error: WAY [WARNING]");
     if (USER_BLOCKS_PER_LUN > MAIN_BLOCKS_PER_LUN)
         assert(!"[WARNING] Configuration Error: BLOCK [WARNING]");
-    // @FIXME: only allow SLC mode ?
     if ((BITS_PER_FLASH_CELL != SLC_MODE))
         assert(!"[WARNING] Configuration Error: BIT_PER_FLASH_CELL [WARNING]");
 

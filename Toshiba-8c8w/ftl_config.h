@@ -143,7 +143,10 @@
 /* the size in bytes of a whole flash page (data + metadata + ECC). */
 #define BYTES_PER_NAND_ROW (BYTES_PER_DATA_REGION_OF_NAND_ROW + BYTES_PER_SPARE_REGION_OF_NAND_ROW)
 
-// @FIXME: why SLC mode == MLC mode ?
+/**
+ * @warning SLC mode == MLC mode?
+ */
+
 #define ROWS_PER_SLC_BLOCK 256 /* number of page in this block (SLC mode) */
 #define ROWS_PER_MLC_BLOCK 256 /* number of page in this block (MLC mode) */
 

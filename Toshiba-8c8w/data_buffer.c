@@ -255,10 +255,10 @@ unsigned int AllocateDataBuf()
  * `nextBlockingReq` of the request pool entry and the `blockingReqTail` of data buffer
  * entry to maintain the blocking queue.
  *
- * @NOTE: the blocking request queue where the specified request to be inserted to is
+ * @note the blocking request queue where the specified request to be inserted to is
  * specified by the `blockingReqTail`.
  *
- * @FIXME: why need this?
+ * @warning why need this?
  *
  * @param byfEntry the data buffer entry index of the specified request
  * @param reqSlotTag the request pool entry index of the request to be

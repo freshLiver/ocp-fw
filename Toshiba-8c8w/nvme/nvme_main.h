@@ -44,10 +44,9 @@
 //   - First draft
 //////////////////////////////////////////////////////////////////////////////////
 
-
 #ifndef __NVME_MAIN_H_
 #define __NVME_MAIN_H_
 
 void nvme_main();
 
-#endif	//__NVME_MAIN_H_
+#endif //__NVME_MAIN_H_

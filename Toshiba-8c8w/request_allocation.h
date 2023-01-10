@@ -50,15 +50,63 @@
 #include "request_format.h"
 #include "request_queue.h"
 
-#define	AVAILABLE_OUNTSTANDING_REQ_COUNT			((USER_DIES) * 128)  //regardless of request type
+/**
+ * @todo why 128?
+ * @warning typo OUNTSTANDING -> OUTSTANDING
+ */
+#define AVAILABLE_OUNTSTANDING_REQ_COUNT ((USER_DIES)*128) // regardless of request type
 
-#define REQ_SLOT_TAG_NONE		0xffff
-#define REQ_SLOT_TAG_FAIL		0xffff
+#define REQ_SLOT_TAG_NONE 0xffff // no request pool entry, used for checking tail entry
+#define REQ_SLOT_TAG_FAIL 0xffff // request pool entry not found, used for return error
 
+/**
+ * @brief The request entries pool for both NVMe and NAND requests.
+ *
+ * A 1D fixed-sized array used for managing the request info and relation between requests.
+ * Each entry in the pool is represented in the structure `SSD_REQ_FORMAT`.
+ *
+ * Unlike the schematic in the paper, this queue is shared by both host and flash
+ * operations, so the structure of `SSD_REQ_FORMAT` contains some members for
+ * distinguishing which type is the request.
+ */
 typedef struct _REQ_POOL
 {
-	SSD_REQ_FORMAT reqPool[AVAILABLE_OUNTSTANDING_REQ_COUNT];
+    SSD_REQ_FORMAT reqPool[AVAILABLE_OUNTSTANDING_REQ_COUNT];
 } REQ_POOL, *P_REQ_POOL;
+
+/* -------------------------------------------------------------------------- */
+/*                     some utile macros for request pool                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Get the request pool entry at specified position
+ *
+ * @param index the request pool entry index of the request you want
+ * @return SSD_REQ_FORMAT the request pool entry
+ */
+#define ReqPool(index) (reqPoolPtr->reqPool[(index)])
+
+/**
+ * @brief Check the request type of the given request pool entry index
+ *
+ * @param idx the request pool entry index of the request to be checked
+ * @param type the supposed type of this request
+ * @return bool true if `reqType` == `type`, otherwise false
+ */
+#define CHECK_REQ_TYPE(idx, type) (ReqPool(idx).reqType == (type))
+
+/**
+ * @brief Check the request queue type of the given request pool entry index
+ *
+ * @param idx the request pool entry index of the request to be checked
+ * @param type the supposed queue type of this request
+ * @return bool true if `reqType` == `type`, otherwise false
+ */
+#define CHECK_REQ_QUEUE_TYPE(idx, qType) (ReqPool(idx).reqQueueType == (qType))
+
+/* -------------------------------------------------------------------------- */
+/*                    no more utile macros for request pool                   */
+/* -------------------------------------------------------------------------- */
 
 void InitReqPool();
 
