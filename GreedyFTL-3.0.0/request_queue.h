@@ -45,6 +45,8 @@
 #ifndef REQUEST_QUEUE_H_
 #define REQUEST_QUEUE_H_
 
+// FIXME: these structures are exactly the same, should be simplified into 1 structure
+
 typedef struct _FREE_REQUEST_QUEUE
 {
     unsigned int headReq : 16;

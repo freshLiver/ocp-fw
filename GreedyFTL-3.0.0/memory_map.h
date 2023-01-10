@@ -68,6 +68,13 @@
 #define FTL_MANAGEMENT_START_ADDR 0x10000000
 // Uncached & Unbuffered
 // for data buffer
+
+/**
+ * @brief The base address of buffer for DMA requests.
+ * 
+ * different from `DATA_BUFFER_MAP_ADDR`, but with the same number of entries (`AVAILABLE_DATA_BUFFER_ENTRY_COUNT`) //TODO
+ * 
+ */
 #define DATA_BUFFER_BASE_ADDR 0x10000000
 #define TEMPORARY_DATA_BUFFER_BASE_ADDR                                                                           \
     (DATA_BUFFER_BASE_ADDR + AVAILABLE_DATA_BUFFER_ENTRY_COUNT * BYTES_PER_DATA_REGION_OF_SLICE)
@@ -80,12 +87,15 @@
     (TEMPORARY_SPARE_DATA_BUFFER_BASE_ADDR +                                                                      \
      AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT * BYTES_PER_SPARE_REGION_OF_SLICE)
 // for nand request completion
+// NOTE: may be important for communicating with hardware
 #define COMPLETE_FLAG_TABLE_ADDR 0x17000000
 #define STATUS_REPORT_TABLE_ADDR (COMPLETE_FLAG_TABLE_ADDR + sizeof(COMPLETE_FLAG_TABLE))
 #define ERROR_INFO_TABLE_ADDR    (STATUS_REPORT_TABLE_ADDR + sizeof(STATUS_REPORT_TABLE))
 #define TEMPORARY_PAY_LOAD_ADDR  (ERROR_INFO_TABLE_ADDR + sizeof(ERROR_INFO_TABLE))
 // cached & buffered
 // for buffers
+
+/* base address of `dataBuf` */
 #define DATA_BUFFER_MAP_ADDR           0x18000000
 #define DATA_BUFFFER_HASH_TABLE_ADDR   (DATA_BUFFER_MAP_ADDR + sizeof(DATA_BUF_MAP))
 #define TEMPORARY_DATA_BUFFER_MAP_ADDR (DATA_BUFFFER_HASH_TABLE_ADDR + sizeof(DATA_BUF_HASH_TABLE))
@@ -98,6 +108,8 @@
 #define VIRTUAL_DIE_MAP_ADDR          (BAD_BLOCK_TABLE_INFO_MAP_ADDR + sizeof(BAD_BLOCK_TABLE_INFO_MAP))
 // for GC victim selection
 #define GC_VICTIM_MAP_ADDR (VIRTUAL_DIE_MAP_ADDR + sizeof(VIRTUAL_DIE_MAP))
+
+
 // for request pool
 #define REQ_POOL_ADDR (GC_VICTIM_MAP_ADDR + sizeof(GC_VICTIM_MAP))
 // for dependency table

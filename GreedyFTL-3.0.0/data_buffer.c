@@ -258,6 +258,8 @@ unsigned int AllocateDataBuf()
  * NOTE: the blocking request queue where the specified request to be inserted to is
  * specified by the `blockingReqTail`.
  *
+ * //FIXME: why need this?
+ *
  * @param byfEntry the data buffer entry index of the specified request
  * @param reqSlotTag the request pool entry index of the request to be
  */

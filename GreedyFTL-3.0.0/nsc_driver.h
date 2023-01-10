@@ -94,7 +94,7 @@ typedef struct
     unsigned int completionAddress;
     unsigned int waySelection;
     unsigned int channelBusy;
-    unsigned int readyBusy;
+    unsigned int readyBusy; // ready flags for ways on the channel, LSB for way 0
 } V2FMCRegisters;
 
 unsigned int V2FIsControllerBusy(V2FMCRegisters *dev);

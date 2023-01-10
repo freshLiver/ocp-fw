@@ -148,25 +148,27 @@
     (NSC_7_CONNECTED + NSC_6_CONNECTED + NSC_5_CONNECTED + NSC_4_CONNECTED + NSC_3_CONNECTED + NSC_2_CONNECTED +  \
      NSC_1_CONNECTED + NSC_0_CONNECTED)
 
-//--------------------------------
-// NAND flash memory specifications
-//--------------------------------
+/* -------------------------------------------------------------------------- */
+/*                      NAND flash memory specifications                      */
+/* -------------------------------------------------------------------------- */
 
-#define BYTES_PER_DATA_REGION_OF_NAND_ROW  16384
-#define BYTES_PER_SPARE_REGION_OF_NAND_ROW 1664
-#define BYTES_PER_NAND_ROW                 (BYTES_PER_DATA_REGION_OF_NAND_ROW + BYTES_PER_SPARE_REGION_OF_NAND_ROW)
+#define BYTES_PER_DATA_REGION_OF_NAND_ROW  16384 /* the size of data region of a page */
+#define BYTES_PER_SPARE_REGION_OF_NAND_ROW 1664  /* the size of spare region of a page */
 
-#define ROWS_PER_SLC_BLOCK 128
-#define ROWS_PER_MLC_BLOCK 256
+/* the size in bytes of a whole flash page (data + metadata + ECC). */
+#define BYTES_PER_NAND_ROW (BYTES_PER_DATA_REGION_OF_NAND_ROW + BYTES_PER_SPARE_REGION_OF_NAND_ROW)
 
-#define MAIN_BLOCKS_PER_LUN     4096
-#define EXTENDED_BLOCKS_PER_LUN 88
+#define ROWS_PER_SLC_BLOCK 128 /* number of page in this block (SLC mode) */
+#define ROWS_PER_MLC_BLOCK 256 /* number of page in this block (MLC mode) */
+
+#define MAIN_BLOCKS_PER_LUN     2048 /* number of blocks in the main space of a die */
+#define EXTENDED_BLOCKS_PER_LUN 88   /* number of blocks in the extended space of a die */
 #define TOTAL_BLOCKS_PER_LUN    (MAIN_BLOCKS_PER_LUN + EXTENDED_BLOCKS_PER_LUN)
 
 #define MAIN_ROWS_PER_SLC_LUN (ROWS_PER_SLC_BLOCK * MAIN_BLOCKS_PER_LUN)
 #define MAIN_ROWS_PER_MLC_LUN (ROWS_PER_MLC_BLOCK * MAIN_BLOCKS_PER_LUN)
 
-#define LUNS_PER_DIE 2
+#define LUNS_PER_DIE 2 /* number of planes in a die (way) */
 
 #define MAIN_BLOCKS_PER_DIE  (MAIN_BLOCKS_PER_LUN * LUNS_PER_DIE)
 #define TOTAL_BLOCKS_PER_DIE (TOTAL_BLOCKS_PER_LUN * LUNS_PER_DIE)
@@ -211,14 +213,14 @@
 #define MLC_MODE 2
 
 //************************************************************************
-#define BITS_PER_FLASH_CELL SLC_MODE                      // user configurable factor
-#define USER_BLOCKS_PER_LUN 4096                          // user configurable factor
-#define USER_CHANNELS       (NUMBER_OF_CONNECTED_CHANNEL) // user configurable factor
-#define USER_WAYS           8                             // user configurable factor
+#define BITS_PER_FLASH_CELL SLC_MODE // user configurable factor
+#define USER_BLOCKS_PER_LUN 2048     // user configurable factor
+#define USER_CHANNELS       8        // user configurable factor
+#define USER_WAYS           8        // user configurable factor
 //************************************************************************
 
-#define BYTES_PER_DATA_REGION_OF_SLICE  16384 // slice is a mapping unit of FTL
-#define BYTES_PER_SPARE_REGION_OF_SLICE 256
+#define BYTES_PER_DATA_REGION_OF_SLICE  16384 // page size, the mapping unit of FTL
+#define BYTES_PER_SPARE_REGION_OF_SLICE 256   // FIXME: the paper said 1664B, ECC?
 
 #define SLICES_PER_PAGE                                                                                           \
     (BYTES_PER_DATA_REGION_OF_PAGE / BYTES_PER_DATA_REGION_OF_SLICE) // a slice directs a page, full page mapping

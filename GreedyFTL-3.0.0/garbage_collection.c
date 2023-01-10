@@ -74,6 +74,7 @@ void GarbageCollection(unsigned int dieNo)
     victimBlockNo  = GetFromGcVictimList(dieNo);
     dieNoForGcCopy = dieNo;
 
+    // migration needed
     if (virtualBlockMapPtr->block[dieNo][victimBlockNo].invalidSliceCnt != SLICES_PER_BLOCK)
     {
         for (pageNo = 0; pageNo < USER_PAGES_PER_BLOCK; pageNo++)

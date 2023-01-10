@@ -56,15 +56,26 @@
 
 #define PSEUDO_BAD_BLOCK_MARK 0
 
-#define RETRY_LIMIT 5 // retry the failed request to the extent that the limit number allows
+/**
+ * @brief The max number of times a request can retry if it failed.
+ * 
+ * Each die has their own retry counter, which is managed by the `RETRY_LIMIT_TABLE`, if
+ * a request is done or reaching the max retry times, the corresponding counter will be
+ * reset to this value.
+ */
+#define RETRY_LIMIT 5
 
 #define DIE_STATE_IDLE 0
 #define DIE_STATE_EXE  1
 
-#define REQ_STATUS_CHECK_OPT_NONE            0
-#define REQ_STATUS_CHECK_OPT_CHECK           1
-#define REQ_STATUS_CHECK_OPT_REPORT          2
-#define REQ_STATUS_CHECK_OPT_COMPLETION_FLAG 3
+#define REQ_STATUS_CHECK_OPT_NONE            0 // no need to check the request status
+#define REQ_STATUS_CHECK_OPT_CHECK           1 //
+#define REQ_STATUS_CHECK_OPT_REPORT          2 //
+#define REQ_STATUS_CHECK_OPT_COMPLETION_FLAG 3 // only for READ_TRANSFER
+
+/* -------------------------------------------------------------------------- */
+/*            possible request states if dieState is DIE_STATE_EXE            */
+/* -------------------------------------------------------------------------- */
 
 #define REQ_STATUS_RUNNING 0
 #define REQ_STATUS_DONE    1
@@ -110,25 +121,25 @@ typedef struct _RETRY_LIMIT_TABLE
  */
 typedef struct _DIE_STATE_ENTRY
 {
-    unsigned int dieState : 8;
-    unsigned int reqStatusCheckOpt : 4;
-    unsigned int prevWay : 4;
-    unsigned int nextWay : 4;
+    unsigned int dieState : 8;          // 0 for DIE_STATE_IDLE, 1 for DIE_STATE_EXE
+    unsigned int reqStatusCheckOpt : 4; // one of the four: NONE, CHECK, REPORT, COMPLETE
+    unsigned int prevWay : 4;           // the die state entry index of prev way in the same list
+    unsigned int nextWay : 4;           // the die state entry index of next way in the same list
     unsigned int reserved : 12;
 } DIE_STATE_ENTRY, *P_DIE_STATE_ENTRY;
 
+/**
+ * @brief The status table of each die on the flash memory.
+ *
+ * This table is simply a 2D status array of each way on each channel.
+ */
 typedef struct _DIE_STATE_TABLE
 {
-    /**
-     * The status table of each way.
-     *
-     * This table is used for
-     */
     DIE_STATE_ENTRY dieState[USER_CHANNELS][USER_WAYS];
 } DIE_STATE_TABLE, *P_DIE_STATE_TABLE;
 
 /**
- * The priority table that manage the statuses of each way.
+ * @brief The way priority table of this channel.
  *
  * This table manage several statuses:
  *
@@ -146,7 +157,6 @@ typedef struct _DIE_STATE_TABLE
  * other lists are empty.
  *
  * // FIXME: why this order
- * // TODO: use union
  */
 typedef struct _WAY_PRIORITY_ENTRY
 {
@@ -167,11 +177,11 @@ typedef struct _WAY_PRIORITY_ENTRY
     unsigned int reserved : 8;
 } WAY_PRIORITY_ENTRY, *P_WAY_PRIORITY_ENTRY;
 
+/**
+ * @brief The channel status table, each entry contains 7 lists.
+ */
 typedef struct _WAY_PRIORITY_TABLE
 {
-    /**
-     * The status table of each channel.
-     */
     WAY_PRIORITY_ENTRY wayPriority[USER_CHANNELS];
 } WAY_PRIORITY_TABLE, *P_WAY_PRIORITY_TABLE;
 

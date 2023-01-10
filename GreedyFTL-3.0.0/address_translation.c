@@ -56,9 +56,29 @@ P_VIRTUAL_DIE_MAP virtualDieMapPtr;
 P_PHY_BLOCK_MAP phyBlockMapPtr;
 P_BAD_BLOCK_TABLE_INFO_MAP bbtInfoMapPtr;
 
-unsigned char sliceAllocationTargetDie;
+unsigned char sliceAllocationTargetDie; // the destination die of next slice command
 unsigned int mbPerbadBlockSpace;
 
+/**
+ * @brief Initialize the translation related maps.
+ *
+ * There are 5 translation related maps:
+ *
+ * // TODO
+ * - Logical Slice Map:
+ * - Virtual Slice Map:
+ * - Virtual Block Map:
+ * - Physical Block Map:
+ * - Bad Block Table (bbt) Info Map:
+ *
+ *
+ * This function, only initialize the base addresses of these maps, the physical block map
+ * and some bad blocks info. The other maps will be initialized in `InitBlockDieMap()` and
+ * `InitSliceMap()`, check the two functions for further initialization.
+ *
+ * To initialize the physical block map, //TODO
+ *
+ */
 void InitAddressMap()
 {
     unsigned int blockNo, dieNo;
@@ -73,6 +93,7 @@ void InitAddressMap()
     // init phyblockMap
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
+        // the blocks should not be remapped to any other blocks before remmaping
         for (blockNo = 0; blockNo < TOTAL_BLOCKS_PER_DIE; blockNo++)
             phyBlockMapPtr->phyBlock[dieNo][blockNo].remappedPhyBlock = blockNo;
 
@@ -80,12 +101,18 @@ void InitAddressMap()
         bbtInfoMapPtr->bbtInfo[dieNo].grownBadUpdate = BBT_INFO_GROWN_BAD_UPDATE_NONE;
     }
 
+    // by default, the request start from the first die
     sliceAllocationTargetDie = FindDieForFreeSliceAllocation();
 
     InitSliceMap();
     InitBlockDieMap();
 }
 
+/**
+ * @brief Initialize Logical and Virtual Slick Map.
+ *
+ * This function simply initialize all the slice addresses in the both map to NONE.
+ */
 void InitSliceMap()
 {
     int sliceAddr;
@@ -223,6 +250,9 @@ void RemapBadBlock()
     mbPerbadBlockSpace = maxBadBlockCount * USER_DIES * MB_PER_BLOCK;
 }
 
+/**
+ * @brief Empty the free block list and counter of each die.
+ */
 void InitDieMap()
 {
     unsigned int dieNo;
@@ -235,6 +265,16 @@ void InitDieMap()
     }
 }
 
+/**
+ * @brief Map the virtual blocks to physical blocks and add non-bad blocks to free list.
+ *
+ * Instead of creating a V2P table and doing translation at runtime, we directly map the
+ * virtual blocks to a physical blocks and add non-bad virtual blocks to the free block
+ * list.
+ *
+ * NOTE: The V2P mapping rule is defined by the two macros `Vblock2PblockOfTbsTranslation`
+ * and `Vblock2PblockOfMbsTranslation`, check `address_translation.h` for details.
+ */
 void InitBlockMap()
 {
     unsigned int dieNo, phyBlockNo, virtualBlockNo, remappedPhyBlock;
@@ -253,6 +293,7 @@ void InitBlockMap()
             virtualBlockMapPtr->block[dieNo][virtualBlockNo].currentPage     = 0;
             virtualBlockMapPtr->block[dieNo][virtualBlockNo].eraseCnt        = 0;
 
+            // bad block should not be added to free block list
             if (virtualBlockMapPtr->block[dieNo][virtualBlockNo].bad)
             {
                 virtualBlockMapPtr->block[dieNo][virtualBlockNo].prevBlock = BLOCK_NONE;
@@ -264,15 +305,23 @@ void InitBlockMap()
     }
 }
 
+/**
+ * @brief Get a default free block for each die.
+ */
 void InitCurrentBlockOfDieMap()
 {
-    unsigned int dieNo;
+    unsigned int dieNo, chNo, wayNo;
 
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
         virtualDieMapPtr->die[dieNo].currentBlock = GetFromFbList(dieNo, GET_FREE_BLOCK_NORMAL);
         if (virtualDieMapPtr->die[dieNo].currentBlock == BLOCK_FAIL)
-            assert(!"[WARNING] There is no free block [WARNING]");
+        {
+            // assert(!"[WARNING] There is no free block [WARNING]");
+            chNo  = Vdie2PchTranslation(dieNo);
+            wayNo = Vdie2PwayTranslation(dieNo);
+            xil_printf("[WARNING] There is no free block on Ch %d Way %d (Die %d)!\r\n", chNo, wayNo, dieNo);
+        }
     }
 }
 
@@ -375,6 +424,15 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
      */
     for (phyBlockNo = 0; phyBlockNo < TOTAL_BLOCKS_PER_DIE; phyBlockNo++)
     {
+        // TESTTING: make all blocks not bad
+        for (dieNo = 0; dieNo < USER_DIES; dieNo++)
+        {
+            bbtUpdater  = (unsigned char *)(tempBbtBufAddr[dieNo] + phyBlockNo);
+            *bbtUpdater = BLOCK_STATE_NORMAL;
+            phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].bad = BLOCK_STATE_NORMAL;
+        }
+        continue;
+
         // Read the first page of the specified block of each die
         for (dieNo = 0; dieNo < USER_DIES; dieNo++)
             if (!dieState[dieNo])
@@ -486,7 +544,8 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
 
     loop     = 0;
     dataSize = DATA_SIZE_OF_BAD_BLOCK_TABLE_PER_DIE;
-    tempPage = PlsbPage2VpageTranslation(START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK);
+    tempPage =
+        PlsbPage2VpageTranslation(START_PAGE_NO_OF_BAD_BLOCK_TABLE_BLOCK); // bad block table is saved at lsb pages
 
     while (dataSize > 0)
     {
@@ -604,6 +663,11 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
     bbtMaker = BAD_BLOCK_TABLE_MAKER_IDLE;
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
+        // TESTTING: ignore all bbt
+        dieState[dieNo] = DIE_STATE_BAD_BLOCK_TABLE_NOT_EXIST;
+        bbtMaker        = BAD_BLOCK_TABLE_MAKER_TRIGGER;
+        continue;
+
         bbtTableChecker = (unsigned char *)(tempBbtBufAddr[dieNo]);
 
         /**
@@ -719,14 +783,24 @@ void EraseUserBlockSpace()
     xil_printf("Done.\r\n");
 }
 
+/**
+ * @brief Create the bad block table and V2P block mapping of each user die.
+ *
+ * To create the V2P mapping, we have to:
+ *
+ * 1. create the bad block table
+ * 2. remap bad blocks
+ * 3. Erase non-bad blocks in the main block space
+ * 4. map virtual blocks to physical blocks
+ */
 void InitBlockDieMap()
 {
     unsigned int dieNo;
     unsigned char eraseFlag = 1;
 
     xil_printf("Press 'X' to re-make the bad block table.\r\n");
-    // char input = inbyte();
-    char input = 'X';
+
+    char input = inbyte();
     if (input == 'X')
     {
         xil_printf("[WARNING!!!] Start re-making bad block table\r\n");
@@ -756,14 +830,25 @@ void InitBlockDieMap()
         phyBlockMapPtr->phyBlock[dieNo][bbtInfoMapPtr->bbtInfo[dieNo].phyBlock].bad = 1;
     RemapBadBlock();
 
+    // create V2P block level mapping
     InitBlockMap();
 
-    if (eraseFlag)
+    if (eraseFlag && 0)
         EraseUserBlockSpace();
 
     InitCurrentBlockOfDieMap();
 }
 
+/* -------------------------------------------------------------------------- */
+/*                      Utility Functions for Translation                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Get the virtual slice address of the given logical slice.
+ *
+ * @param logicalSliceAddr the logical address of the target slice.
+ * @return unsigned int the virtual address of the target slice.
+ */
 unsigned int AddrTransRead(unsigned int logicalSliceAddr)
 {
     unsigned int virtualSliceAddr;
@@ -781,6 +866,12 @@ unsigned int AddrTransRead(unsigned int logicalSliceAddr)
         assert(!"[WARNING] Logical address is larger than maximum logical address served by SSD [WARNING]");
 }
 
+/**
+ * @brief Assign a new virtual slice to the given slice and get its virtual address.
+ *
+ * @param logicalSliceAddr the logical address of the target slice.
+ * @return unsigned int the renewed virtual address of the target slice.
+ */
 unsigned int AddrTransWrite(unsigned int logicalSliceAddr)
 {
     unsigned int virtualSliceAddr;
@@ -800,6 +891,13 @@ unsigned int AddrTransWrite(unsigned int logicalSliceAddr)
         assert(!"[WARNING] Logical address is larger than maximum logical address served by SSD [WARNING]");
 }
 
+/**
+ * @brief Assign a virtual slice to the current working page.
+ *
+ * If the current working block of the target die is full, try to allocate a new block.
+ *
+ * @return unsigned int the VSA for the request.
+ */
 unsigned int FindFreeVirtualSlice()
 {
     unsigned int currentBlock, virtualSliceAddr, dieNo;
@@ -807,6 +905,7 @@ unsigned int FindFreeVirtualSlice()
     dieNo        = sliceAllocationTargetDie;
     currentBlock = virtualDieMapPtr->die[dieNo].currentBlock;
 
+    // if the currently used block is full, assign a free block as new current block
     if (virtualBlockMapPtr->block[dieNo][currentBlock].currentPage == USER_PAGES_PER_BLOCK)
     {
         currentBlock = GetFromFbList(dieNo, GET_FREE_BLOCK_NORMAL);
@@ -818,6 +917,7 @@ unsigned int FindFreeVirtualSlice()
             GarbageCollection(dieNo);
             currentBlock = virtualDieMapPtr->die[dieNo].currentBlock;
 
+            // FIXME: ???
             if (virtualBlockMapPtr->block[dieNo][currentBlock].currentPage == USER_PAGES_PER_BLOCK)
             {
                 currentBlock = GetFromFbList(dieNo, GET_FREE_BLOCK_NORMAL);
@@ -837,10 +937,11 @@ unsigned int FindFreeVirtualSlice()
         Vorg2VsaTranslation(dieNo, currentBlock, virtualBlockMapPtr->block[dieNo][currentBlock].currentPage);
     virtualBlockMapPtr->block[dieNo][currentBlock].currentPage++;
     sliceAllocationTargetDie = FindDieForFreeSliceAllocation();
-    dieNo                    = sliceAllocationTargetDie;
+    dieNo                    = sliceAllocationTargetDie; // FIXME: redundant ???
     return virtualSliceAddr;
 }
 
+// TODO
 unsigned int FindFreeVirtualSliceForGc(unsigned int copyTargetDieNo, unsigned int victimBlockNo)
 {
     unsigned int currentBlock, virtualSliceAddr, dieNo;
@@ -873,6 +974,24 @@ unsigned int FindFreeVirtualSliceForGc(unsigned int copyTargetDieNo, unsigned in
     return virtualSliceAddr;
 }
 
+/**
+ * @brief Choose a die for
+ *
+ * The rule to choose a die is:
+ *
+ * C0W0 -> C1W0 -> ... -> C7W0 ->
+ * C0W1 -> C1W1 -> ... -> C7W1 ->
+ * ...
+ * C0W7 -> C1W7 -> ... -> C7W7 ->
+ * C0W0 -> C1W0 -> ... -> C7W0 ->
+ * ...
+ *
+ * So the allocation will be interleaved on channel first.
+ *
+ * @warning As paper the mentioned, may not perform well if latency largely varied.
+ *
+ * @return unsigned int the die number of the chosen die.
+ */
 unsigned int FindDieForFreeSliceAllocation()
 {
     static unsigned char targetCh  = 0;
@@ -892,6 +1011,7 @@ unsigned int FindDieForFreeSliceAllocation()
     return targetDie;
 }
 
+// TODO
 void InvalidateOldVsa(unsigned int logicalSliceAddr)
 {
     unsigned int virtualSliceAddr, dieNo, blockNo;
@@ -915,6 +1035,22 @@ void InvalidateOldVsa(unsigned int logicalSliceAddr)
     }
 }
 
+/**
+ * @brief Erase the specified block of the specified die and discard its LSAs.
+ *
+ * This function will:
+ *
+ * - Send a ERASE request to erase the specified block
+ * - Move the specified block to free block list
+ * - Discard all the logical slice addresses of the origin block
+ *
+ * @todo programmedPageCnt
+ *
+ * @note The specified block may not be invalidated immediately.
+ *
+ * @param dieNo the die number of the specified block.
+ * @param blockNo the block number on the specified die.
+ */
 void EraseBlock(unsigned int dieNo, unsigned int blockNo)
 {
     unsigned int pageNo, virtualSliceAddr, reqSlotTag;
@@ -948,7 +1084,13 @@ void EraseBlock(unsigned int dieNo, unsigned int blockNo)
     }
 }
 
-void PutToFbList(unsigned int dieNo, unsigned int blockNo) // fb means free block
+/**
+ * @brief Append the given block to the free block list on its die.
+ *
+ * @param dieNo the die number of the given block.
+ * @param blockNo a free block number.
+ */
+void PutToFbList(unsigned int dieNo, unsigned int blockNo)
 {
     if (virtualDieMapPtr->die[dieNo].tailFreeBlock != BLOCK_NONE)
     {
@@ -968,7 +1110,19 @@ void PutToFbList(unsigned int dieNo, unsigned int blockNo) // fb means free bloc
     virtualDieMapPtr->die[dieNo].freeBlockCnt++;
 }
 
-unsigned int GetFromFbList(unsigned int dieNo, unsigned int getFreeBlockOption) // fb means free block
+/**
+ * @brief Pop the first block in the free block list of the specified die.
+ *
+ * The chosen block may be used for normal request (`GET_FREE_BLOCK_NORMAL`) or GC request
+ * (`GET_FREE_BLOCK_GC`),
+ *
+ * @note If the , //TODO
+ *
+ * @param dieNo the target die number.
+ * @param getFreeBlockOption
+ * @return unsigned int the virtual block map index of the evicted block.
+ */
+unsigned int GetFromFbList(unsigned int dieNo, unsigned int getFreeBlockOption)
 {
     unsigned int evictedBlockNo;
 

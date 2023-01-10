@@ -59,7 +59,27 @@ P_RETRY_LIMIT_TABLE retryLimitTablePtr;
 P_DIE_STATE_TABLE dieStateTablePtr;
 P_WAY_PRIORITY_TABLE wayPriorityTablePtr;
 
-/* Initialize the tables that would be used for scheduling. */
+static int eraseCnt[USER_CHANNELS][USER_WAYS] = {};
+
+/**
+ * @brief Initialize scheduling related tables.
+ *
+ * The following tables may be used for scheduling:
+ *
+ * - `dieStateTablePtr`: contains the metadata of all dies
+ * - `wayPriorityTablePtr`: manages the way state table of each channel
+ * - `completeFlagTablePtr`: //TODO
+ * - `statusReportTablePtr`: //TODO
+ * - `eccErrorInfoTablePtr`: //TODO
+ * - `retryLimitTablePtr`: manages the remain retry count of each die
+ *
+ * In this function:
+ *
+ * - all the ways of same channel are in the idle list of their channel.
+ * - all the dies are in idle state and connected in serial order
+ * - the completion count and status report of all die are set to 0
+ * - the retry limit number of each die is set to `RETRY_LIMIT`
+ */
 void InitReqScheduler()
 {
     int chNo, wayNo;
@@ -136,6 +156,15 @@ void SyncAvailFreeReq()
     }
 }
 
+/**
+ * @brief //TODO
+ *
+ * Similar to `SyncAllLowLevelReqDone()`, but
+ *
+ * @param chNo
+ * @param wayNo
+ * @param blockNo
+ */
 void SyncReleaseEraseReq(unsigned int chNo, unsigned int wayNo, unsigned int blockNo)
 {
     while (rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].blockedEraseReqFlag)
@@ -357,6 +386,8 @@ void SchedulingNandReqPerCh(unsigned int chNo)
      *      GUESS: The reason that we don't check the status of READ_TRANSFER requests may
      *      be this type of requests are supposed to be time consuming task, thus we have
      *      no need to check the status right after they just being issued.
+     *
+     *      // FIXME: here should second stage status check
      */
     if (waitWayCnt != USER_WAYS)
         if (!V2FIsControllerBusy(chCtlReg[chNo]))
@@ -368,7 +399,7 @@ void SchedulingNandReqPerCh(unsigned int chNo)
 
                 while (wayNo != WAY_NONE)
                 {
-                    if (V2FWayReady(readyBusy, wayNo))
+                    if (V2FWayReady(readyBusy, wayNo)) // FIXME: why this need?
                     {
                         // FIXME: called again in second stage status check?? redundant??
                         reqStatus = CheckReqStatus(chNo, wayNo);
@@ -817,6 +848,9 @@ void SelectiveGetFromNandReadTransferList(unsigned int chNo, unsigned int wayNo)
  */
 void PutToNandEraseList(unsigned int chNo, unsigned int wayNo)
 {
+    if (!(++eraseCnt[chNo][wayNo] & 0xFF))
+        xil_printf("[WARNGIN!!!] %d erases on Ch %d Way %d\r\n", eraseCnt[chNo][wayNo], chNo, wayNo);
+
     if (wayPriorityTablePtr->wayPriority[chNo].eraseTail != WAY_NONE)
     {
         dieStateTablePtr->dieState[chNo][wayNo].prevWay = wayPriorityTablePtr->wayPriority[chNo].eraseTail;
@@ -1029,6 +1063,18 @@ void IssueNandReq(unsigned int chNo, unsigned int wayNo)
         assert(!"[WARNING] not defined nand req [WARNING]");
 }
 
+/**
+ * @brief Get the nand row (block) address of the given request.
+ *
+ * To get the row address, we have first check if the nand address format is VSA or not.
+ * If the address is VSA, we should convert it to the physical address by doing address
+ * translation.
+ *
+ * //TODO
+ *
+ * @param reqSlotTag the request pool index of the target request.
+ * @return unsigned int the nand row address for the target request.
+ */
 unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
 {
     unsigned int rowAddr, lun, virtualBlockNo, tempBlockNo, phyBlockNo, tempPageNo, dieNo;
@@ -1042,6 +1088,7 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
         tempBlockNo    = phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].remappedPhyBlock % TOTAL_BLOCKS_PER_LUN;
         tempPageNo     = Vsa2VpageTranslation(reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr);
 
+        /* for SLC mode, use the LSB page of MLC page */
         if (BITS_PER_FLASH_CELL == SLC_MODE)
             tempPageNo = Vpage2PlsbPageTranslation(tempPageNo);
     }
@@ -1051,13 +1098,13 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
                                     reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalWay);
         if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace == REQ_OPT_BLOCK_SPACE_TOTAL)
         {
-            lun = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock / TOTAL_BLOCKS_PER_LUN;
-
+            lun         = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock / TOTAL_BLOCKS_PER_LUN;
             tempBlockNo = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock % TOTAL_BLOCKS_PER_LUN;
             tempPageNo  = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalPage;
         }
         else if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace == REQ_OPT_BLOCK_SPACE_MAIN)
         {
+            // FIXME: why not use `USER_BLOCKS_PER_LUN`
             lun         = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock / MAIN_BLOCKS_PER_LUN;
             tempBlockNo = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock % MAIN_BLOCKS_PER_LUN +
                           lun * TOTAL_BLOCKS_PER_LUN;
@@ -1126,7 +1173,12 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
         else if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
             return reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr;
 
-        return RESERVED_DATA_BUFFER_BASE_ADDR; // FIXME: for ERASE operation?
+        /**
+         * For some requests like RESET, SET_FEATURE and ERASE, the
+         * they won't use the data
+         * buffer. Therefore we just assign a reserved buffer for them.
+         */
+        return RESERVED_DATA_BUFFER_BASE_ADDR;
     }
     else if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NVME_DMA)
     {
@@ -1359,7 +1411,7 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
                 if (retryLimitTablePtr->retryLimit[chNo][wayNo] > 0)
                 {
                     retryLimitTablePtr->retryLimit[chNo][wayNo]--;
-
+                    // FIXME: why not just use READ_TRANSFER
                     if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ_TRANSFER)
                         reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_READ;
 
@@ -1386,7 +1438,7 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
                 {
                     // Request fail in the bad block detection process
                     badCheck  = (unsigned char *)reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr;
-                    *badCheck = PSEUDO_BAD_BLOCK_MARK;
+                    *badCheck = PSEUDO_BAD_BLOCK_MARK; // FIXME: ???, why not two step assign ???
                 }
 
             // grown bad block information update
@@ -1406,6 +1458,7 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
                        statusReportTablePtr->statusReport[chNo][wayNo]);
 
             // grown bad block information update
+            // TODO
             phyBlockNo = ((rowAddr % LUN_1_BASE_ADDR) / PAGES_PER_MLC_BLOCK) +
                          ((rowAddr / LUN_1_BASE_ADDR) * TOTAL_BLOCKS_PER_LUN);
             UpdatePhyBlockMapForGrownBadBlock(Pcw2VdieTranslation(chNo, wayNo), phyBlockNo);

@@ -72,6 +72,11 @@ typedef struct _ROW_ADDR_DEPENDENCY_ENTRY
     unsigned int reserved0 : 3;
 } ROW_ADDR_DEPENDENCY_ENTRY, *P_ROW_ADDR_DEPENDENCY_ENTRY;
 
+/**
+ * @brief 
+ * //TODO
+ * 
+ */
 typedef struct _ROW_ADDR_DEPENDENCY_TABLE
 {
     ROW_ADDR_DEPENDENCY_ENTRY block[USER_CHANNELS][USER_WAYS][MAIN_BLOCKS_PER_DIE];

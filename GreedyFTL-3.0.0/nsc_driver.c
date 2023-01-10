@@ -164,6 +164,11 @@ unsigned int __attribute__((optimize("O0"))) V2FStatusCheckSync(V2FMCRegisters *
     return (status >> 1);
 }
 
+/**
+ * @brief Get the way busy/ready status of the specified channel.
+ *
+ * @param dev the predefined register address of the specified channel.
+ */
 unsigned int __attribute__((optimize("O0"))) V2FReadyBusyAsync(V2FMCRegisters *dev)
 {
     volatile unsigned int readyBusy = dev->readyBusy;
