@@ -1,9 +1,8 @@
-# documentation configs
-# Doxyfile
+# Doxygen configs
 docs/
+theme/
 
 # workspace configs
 .vscode/
-
-# coding style
-# .clang-format
+.github/
+ocp-fw.code-workspace
