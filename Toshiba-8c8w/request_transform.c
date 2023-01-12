@@ -158,7 +158,15 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 }
 
 /**
- * @brief Clear the allocated data buffer entry used by a previous request.
+ * @brief Clear the specified data buffer entry and sync dirty data if needed.
+ *
+ * In current implementation, the data buffer entry used for a request is determined on
+ * the `logicalSliceAddr` of that request, therefore the data buffer entry may be reused.
+ *
+ * If the data buffer entry need to be reused, we may need to sync the buffer content if
+ * the content of the data buffer entry was marked as dirty.
+ *
+ * @param originReqSlotTag the request pool entry index of the given slice request.
  */
 void EvictDataBufEntry(unsigned int originReqSlotTag)
 {
@@ -190,6 +198,11 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
     }
 }
 
+/**
+ * @brief Generate and dispatch a flash read request for the given slice request.
+ *
+ * @param originReqSlotTag the request pool entry index of the given slice request.
+ */
 void DataReadFromNand(unsigned int originReqSlotTag)
 {
     unsigned int reqSlotTag, virtualSliceAddr;
@@ -220,25 +233,49 @@ void DataReadFromNand(unsigned int originReqSlotTag)
     }
 }
 
+/**
+ * @brief Data Buffer Manager. Handle all the pending slice requests.
+ *
+ * This function will repeat the following steps until all the pending slice requests are
+ * consumed:
+ *
+ * 1. Select a slice request from the slice request queue `sliceReqQ`.
+ *
+ * 2. Allocate a data buffer entry for the request and generate flash requests if needed.
+ *
+ *  @warning Why no need to modify `logicalSliceAddr` and generate flash request when
+ *  buffer hit? data cache hit??
+ *
+ * 3. Generate NVMe transfer/receive request for read/write request.
+ *
+ *  @warning Why mark the data buffer dirty for write request?
+ *
+ * 4. Dispatch the transfer/receive request by calling `SelectLowLevelReqQ()`.
+ *
+ *
+ * @note This function is currently only called after `handle_nvme_io_cmd()` during the
+ * process of handling NVMe I/O commands in `nvme_main.c`.
+ */
 void ReqTransSliceToLowLevel()
 {
     unsigned int reqSlotTag, dataBufEntry;
 
-    /**
-     * Select slice command from slice queue if not empty.
-     *
-     * This part has several important works to do:
-     *
-     * - allocate an entry in reservation station
-     * - check command type (read or write)
-     */
+    // consume all pending slice requests in slice request queue
     while (sliceReqQ.headReq != REQ_SLOT_TAG_NONE)
     {
+        // get the request pool entry index of the slice request
         reqSlotTag = GetFromSliceReqQ();
         if (reqSlotTag == REQ_SLOT_TAG_FAIL)
             return;
 
-        // allocate a data buffer entry for this request
+        /*
+         * In current implementation, the data buffer to be used is determined on the
+         * `logicalSliceAddr` of this request, so the data buffer may already be allocated
+         * before and so we can simply reuse that data buffer.
+         *
+         * If the data buffer not exists, we must allocate a data buffer entry by calling
+         * `AllocateDataBuf()` and initialize the newly created data buffer.
+         */
         dataBufEntry = CheckDataBufHit(reqSlotTag);
         if (dataBufEntry != DATA_BUF_FAIL)
         {
@@ -251,23 +288,26 @@ void ReqTransSliceToLowLevel()
             dataBufEntry                                      = AllocateDataBuf();
             reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
 
-            // clear the allocated data buffer entry being used by a previous request
+            // initialize the newly allocated data buffer entry for this request
             EvictDataBufEntry(reqSlotTag);
-
-            // update meta-data of the allocated data buffer entry
             dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr =
                 reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
             PutToDataBufHashList(dataBufEntry);
 
+            /*
+             * The allocated buffer will be used to store the data to be sent to host, or
+             * received from the host. So before transfering the data to host, we need to
+             * call the function `DataReadFromNand()` to read the desired data to buffer.
+             */
             if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
                 DataReadFromNand(reqSlotTag);
             else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE)
-                if (reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock !=
-                    NVME_BLOCKS_PER_SLICE) // for read modify write
+                if (reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE)
+                    // for read modify write
                     DataReadFromNand(reqSlotTag);
         }
 
-        // transform this slice request to nvme request
+        // generate NVMe request by replacing the slice request entry directly
         if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE)
         {
             dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
