@@ -62,15 +62,13 @@ unsigned int mbPerbadBlockSpace;
 /**
  * @brief Initialize the translation related maps.
  *
- * There are 5 translation related maps:
+ * The following tasks will be finished in the function:
  *
- * @todo
- * - Logical Slice Map:
- * - Virtual Slice Map:
- * - Virtual Block Map:
- * - Physical Block Map:
- * - Bad Block Table (bbt) Info Map:
- *
+ * - Initialize logical and virtual slice map (all entries map to NONE)
+ * - Read/Remake the bad block table of each die
+ * - Replace bad blocks with the reserved blocks in the same die
+ * - Initialize V2P table and free block list
+ * - Choose a free block as the current working block for each die
  *
  * This function, only initialize the base addresses of these maps, the physical block map
  * and some bad blocks info. The other maps will be initialized in `InitBlockDieMap()` and
@@ -254,7 +252,7 @@ void RemapBadBlock()
 }
 
 /**
- * @brief Empty the free block list and counter of each die.
+ * @brief Reset the free block list of each die.
  */
 void InitDieMap()
 {
@@ -269,14 +267,24 @@ void InitDieMap()
 }
 
 /**
- * @brief Map the virtual blocks to physical blocks and add non-bad blocks to free list.
+ * @brief Create V2P table and free block list.
  *
- * Instead of creating a V2P table and doing translation at runtime, we directly map the
- * virtual blocks to a physical blocks and add non-bad virtual blocks to the free block
- * list.
+ * Map each virtual block to a correpsonding physical block:
  *
- * @note The V2P mapping rule is defined by the two macros `Vblock2PblockOfTbsTranslation`
- * and `Vblock2PblockOfMbsTranslation`, check `address_translation.h` for details.
+ *  - The translation rule is basically static mapping, but the target physical block may
+ *    be bad block and replaced by another reserved block. Therefore, we should check the
+ *    `remappedPhyBlock` to get the avaliable physical block.
+ *
+ *    @sa
+ *      - `Vblock2PblockOfTbsTranslation` defines the V2P mapping rule.
+ *      - `InitAddressMap` and `RemapBadBlock()` defines bad block remapping rule.
+ *
+ *    @note If there is no enough reserved block to remap the bad physical block, the
+ *    `remappedPhyBlock` will still points to the original PBA. So we must check the bad
+ *    block flag to make sure the remapped block is available.
+ *
+ *  - If the target physical block of the virtual block is non-bad block, add the virtual
+ *    block into free block list; otherwise, ignore and avoid to use the virtual block.
  */
 void InitBlockMap()
 {
@@ -775,14 +783,14 @@ void EraseUserBlockSpace()
 }
 
 /**
- * @brief Create the bad block table and V2P block mapping of each user die.
+ * @brief Build the bad block table and V2P block mapping of each user die.
  *
  * To create the V2P mapping, we have to:
  *
- * 1. create the bad block table
- * 2. remap bad blocks
- * 3. Erase non-bad blocks in the main block space
- * 4. map virtual blocks to physical blocks
+ * 1. Build the bad block table by reading or remaking the bad block table
+ * 2. Replace bad blocks with reserved blocks
+ * 3. Map virtual blocks to available physical blocks
+ * 4. Add available virtual blocks into free block list
  */
 void InitBlockDieMap()
 {
@@ -809,7 +817,7 @@ void InitBlockDieMap()
     // read bbt from flash [, create bbt, persist new bbt to flash]
     RecoverBadBlockTable(RESERVED_DATA_BUFFER_BASE_ADDR);
 
-    /**
+    /*
      * Since the block specified by `BAD_BLOCK_TABLE_INFO_ENTRY::phyBlock` is used for
      * storing the bbt of that die, so we have to mark that block bad and let it to be
      * remapped to another block for using.
@@ -821,7 +829,7 @@ void InitBlockDieMap()
         phyBlockMapPtr->phyBlock[dieNo][bbtInfoMapPtr->bbtInfo[dieNo].phyBlock].bad = 1;
     RemapBadBlock();
 
-    // create V2P block level mapping
+    // create V2P table and initialize free block list
     InitBlockMap();
 
     if (eraseFlag)
@@ -858,10 +866,12 @@ unsigned int AddrTransRead(unsigned int logicalSliceAddr)
 }
 
 /**
- * @brief Assign a new virtual slice to the given slice and get its virtual address.
+ * @brief Assign a new virtual slice for the given logical slice.
+ *
+ * @note The old virtual slice will be invalidated during this function.
  *
  * @param logicalSliceAddr the logical address of the target slice.
- * @return unsigned int the renewed virtual address of the target slice.
+ * @return unsigned int the renewed virtual slice address for the given logical slice.
  */
 unsigned int AddrTransWrite(unsigned int logicalSliceAddr)
 {
@@ -1077,10 +1087,10 @@ void EraseBlock(unsigned int dieNo, unsigned int blockNo)
 }
 
 /**
- * @brief Append the given block to the free block list on its die.
+ * @brief Append the given virtual block to the free block list of its die.
  *
  * @param dieNo the die number of the given block.
- * @param blockNo a free block number.
+ * @param blockNo VBN of the specified block.
  */
 void PutToFbList(unsigned int dieNo, unsigned int blockNo)
 {

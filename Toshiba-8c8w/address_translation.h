@@ -67,8 +67,8 @@
 
 #define RESERVED_FREE_BLOCK_COUNT 0x1
 
-#define GET_FREE_BLOCK_NORMAL 0x0
-#define GET_FREE_BLOCK_GC     0x1
+#define GET_FREE_BLOCK_NORMAL 0x0 // get free block for normal request
+#define GET_FREE_BLOCK_GC     0x1 // get free block for gc request
 
 #define BLOCK_STATE_NORMAL 0 // this block is not bad block
 #define BLOCK_STATE_BAD    1 // this block is bad block
@@ -108,7 +108,26 @@
 #define Vsa2VblockTranslation(virtualSliceAddr) (((virtualSliceAddr) / (USER_DIES)) / (SLICES_PER_BLOCK))
 #define Vsa2VpageTranslation(virtualSliceAddr)  (((virtualSliceAddr) / (USER_DIES)) % (SLICES_PER_BLOCK))
 
-// virtual organization to virtual slice address translation
+/**
+ * @brief Translate virtual NAND organization (location vector) into VSA.
+ *
+ * @warning why the pages with same offset but on different die are grouped together?
+ *
+ * The virtual slices with same page offset but on different die are grouped together,
+ * that is the virtual slice address 0 ~ (`USER_DIES` - 1) will be mapped to the page 0 of
+ * each user die, the virtual slice address `USER_DIES` ~ (2 x `USER_DIES` - 1) will be
+ * mapped to the page 1 of each user die, and so on.
+ *
+ * Therefore, in order to translate the virtual organization into VSA, we should:
+ *
+ * 1. Calculate the page offset within a die
+ * 2. Use the page offset to find the group within all the groups
+ * 3. Use `dieNo` to get the VSA for this die in the target group
+ *
+ * @param dieNo the die number for this slice request.
+ * @param blockNo the block number for this slice request.
+ * @param pageNo the page offset in this block for this slice request.
+ */
 #define Vorg2VsaTranslation(dieNo, blockNo, pageNo)                                                               \
     ((dieNo) + (USER_DIES) * ((blockNo) * (SLICES_PER_BLOCK) + (pageNo)))
 
@@ -120,19 +139,13 @@
 #define Vdie2PwayTranslation(dieNo) ((dieNo) / (USER_CHANNELS))
 
 /**
- * @brief The V2P block mapping rule (total block space).
+ * @brief Get the PBA (in total block space) of the given VBN.
  *
- * This translation basically just map the virtual block to the physical
+ * The mapping rule is basically use static mapping, but since the number of user blocks
+ * on a die may be less than the number of total blocks (MAIN + EXTENDED) on that die, we
+ * must use `USER_BLOCKS_PER_LUN` to calculate the offset of the given VBN.
  *
- * To perform a V2P translation, we must consider two problems:
- *
- * - The number of user blocks may be less than total blocks on that die
- * - The blocks on LUN 0 and LUN 1 are flatten as 1D block array
- *
- * @todo Therefore, the
- *
- * @note Tbs = Total block space
- * @warning what if very small `USER_BLOCKS_PER_LUN`
+ * @note Tbs = Total block space = MAIN + EXTENDED
  */
 #define Vblock2PblockOfTbsTranslation(blockNo)                                                                    \
     (((blockNo) / (USER_BLOCKS_PER_LUN)) * (TOTAL_BLOCKS_PER_LUN) + ((blockNo) % (USER_BLOCKS_PER_LUN)))
@@ -141,7 +154,7 @@
  * @brief The V2P block mapping rule (main block space).
  *
  * @note Mbs = Main block space
- * @warning what if very small `USER_BLOCKS_PER_LUN`
+ * @warning why this needed?
  */
 #define Vblock2PblockOfMbsTranslation(blockNo)                                                                    \
     (((blockNo) / (USER_BLOCKS_PER_LUN)) * (MAIN_BLOCKS_PER_LUN) + ((blockNo) % (USER_BLOCKS_PER_LUN)))
