@@ -236,10 +236,10 @@ typedef struct _REQ_OPTION
  */
 typedef struct _SSD_REQ_FORMAT
 {
-    unsigned int reqType : 4;         // the type of this request
+    unsigned int reqType : 4;         // the type of this request. Slice, NAND or NVMe command.
     unsigned int reqQueueType : 4;    // the type of request queue where this request is stored
     unsigned int reqCode : 8;         // READ/WRITE/RxDMA/TxDMA/etc. (check REQ_CODE_*)
-    unsigned int nvmeCmdSlotTag : 16; //
+    unsigned int nvmeCmdSlotTag : 16; // TODO
 
     unsigned int logicalSliceAddr;
 

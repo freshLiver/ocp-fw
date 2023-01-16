@@ -845,7 +845,7 @@ typedef struct _IO_READ_COMMAND_DW12
         unsigned int dword;
         struct
         {
-            /* Num of logical blocks to read */
+            /* Num of logical blocks to read, 0's based */
             unsigned short NLB;
             unsigned short reserved0 : 10;
             /* Protection information action and check field */

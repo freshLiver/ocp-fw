@@ -74,6 +74,52 @@ void InitDependencyTable()
     }
 }
 
+/**
+ * @brief Split NVMe command into slice requests.
+ *
+ * @note The unit of the given `startLba` and `nlb` is NVMe block, not NAND block.
+ *
+ * To get the starting LSA of this NVMe command, we need to divide the given `startLba` by
+ * `NVME_BLOCKS_PER_SLICE` which indicates that how many NVMe blocks can be merged into a
+ * slice request.
+ *
+ * To get the number of NAND blocks needed by this NVMe command, we should first align the
+ * starting NVMe block address `startLba` to slice 0, then convert the ending NVMe block
+ * address (`startLba` % `NVME_BLOCKS_PER_SLICE` + `requestedNvmeBlock`) to LSA, then the
+ * result indicates the number of slice requests needed by this NVMe command.
+ *
+ * @note Accroding to the NVMe spec, NLB is a 0's based value, so we should increase the
+ * `requestedNvmeBlock` by 1 to get the real number of NVMe blocks to be read/written by
+ * this NVMe command.
+ *
+ * Now the address translation part is finished and we can start to split the NVMe command
+ * into slice requests. The splitting process can be separated into 3 steps:
+ *
+ * 1. Fill the remaining NVMe blocks in first slice request (head)
+ *
+ *  Since the `startLba` may not perfectly align to the first NVMe block of first slice
+ *  command, we should access the tailing N NVMe blocks in the first slice request, where
+ *  N is the number of misaligned NVMe blocks in the first slice requests.
+ *
+ * 2. Generate slice requests for the aligned NVMe blocks (body)
+ *
+ *  General case. The number of the NVMe blocks to be filled by these slice requests is
+ *  exactly `NVME_BLOCKS_PER_SLICE`. So here just simply use a loop to generate same slice
+ *  requests.
+ *
+ * 3. Generate slice request for the remaining NVMe blocks (tail)
+ *
+ *  Similar to the first step, but here we need to access the first K NVMe blocks in the
+ *  last slice request, where K is the number of remaining NVMe blocks in this slice
+ *  request.
+ *
+ * @todo generalize the three steps
+ *
+ * @param cmdSlotTag @todo //TODO
+ * @param startLba address of the first logical NVMe block to read/write.
+ * @param nlb number of logical NVMe blocks to read/write.
+ * @param cmdCode opcode of the given NVMe command.
+ */
 void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigned int nlb, unsigned int cmdCode)
 {
     unsigned int reqSlotTag, requestedNvmeBlock, tempNumOfNvmeBlock, transCounter, tempLsa, loop, nvmeBlockOffset,
@@ -85,6 +131,7 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
     tempLsa            = startLba / NVME_BLOCKS_PER_SLICE;
     loop               = ((startLba % NVME_BLOCKS_PER_SLICE) + requestedNvmeBlock) / NVME_BLOCKS_PER_SLICE;
 
+    // translate the opcode for NVMe command into that for slice requests.
     if (cmdCode == IO_NVM_WRITE)
         reqCode = REQ_CODE_WRITE;
     else if (cmdCode == IO_NVM_READ)

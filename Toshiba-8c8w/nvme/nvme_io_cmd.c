@@ -61,7 +61,13 @@
 #include "../request_transform.h"
 
 /**
- * Entry point for NVM read commands.
+ * @brief The entry function for translating the given NVMe command into slice requests.
+ *
+ * @note This function only extract some information of the given NVMe command before
+ * spliting the NVMe command into slice requests.
+ *
+ * @param cmdSlotTag @todo the entry index of the given NVMe command.
+ * @param nvmeIOCmd a pointer points to the instance of given NVMe command.
  */
 void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
 {
