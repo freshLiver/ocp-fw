@@ -98,7 +98,7 @@ void InitDependencyTable()
  * 1. Fill the remaining NVMe blocks in first slice request (head)
  *
  *  Since the `startLba` may not perfectly align to the first NVMe block of first slice
- *  command, we should access the tailing N NVMe blocks in the first slice request, where
+ *  command, we should access the trailing N NVMe blocks in the first slice request, where
  *  N is the number of misaligned NVMe blocks in the first slice requests.
  *
  * 2. Generate slice requests for the aligned NVMe blocks (body)
@@ -248,7 +248,16 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
 /**
  * @brief Generate and dispatch a flash read request for the given slice request.
  *
- * @param originReqSlotTag the request pool entry index of the given slice request.
+ * Before issuing NVMe Tx request and migration, we must read the target page into target
+ * data buffer entry. To do this, we should create and issue a sub-request for flash read
+ * operation.
+ *
+ * @warning In the original implementation, `nandInfo.virtualSliceAddr` was assigned after
+ * calling the function `UpdateDataBufEntryInfoBlockingReq()`.
+ *
+ * @sa `ReqTransSliceToLowLevel()`
+ *
+ * @param originReqSlotTag the request pool entry index of the parent NVMe slice request.
  */
 void DataReadFromNand(unsigned int originReqSlotTag)
 {
@@ -256,8 +265,16 @@ void DataReadFromNand(unsigned int originReqSlotTag)
 
     virtualSliceAddr = AddrTransRead(reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr);
 
+    /*
+     * Since `ReqTransNvmeToSlice()` only set a part of options for `ReqTransNvmeToSlice`,
+     * we need to set more detailed configs before issuing NAND requests.
+     */
     if (virtualSliceAddr != VSA_FAIL)
     {
+        /*
+         * the request entry created by caller is only used for NVMe Tx/Rx, new request
+         * entry is needed for flash read request.
+         */
         reqSlotTag = GetFromFreeReqQ();
 
         reqPoolPtr->reqPool[reqSlotTag].reqType          = REQ_TYPE_NAND;
@@ -349,6 +366,7 @@ void ReqTransSliceToLowLevel()
             if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
                 DataReadFromNand(reqSlotTag);
             else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE)
+                // in case of not overwriting a whole page, read current page content for migration
                 if (reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE)
                     // for read modify write
                     DataReadFromNand(reqSlotTag);
@@ -376,11 +394,12 @@ void ReqTransSliceToLowLevel()
 /**
  * @brief Check if this request has the buffer dependency problem.
  *
- * If the specified request is the first (head) request in the blocking request queue,
- * which means this request should not be blocked by buffer dependency, return PASS.
- * Otherwise return BLOCKED without adding this request to the blocking request queue.
+ * Requests that share the same data buffer entry must be executed in correct order, and
+ * the execution order is identical to the order of the request entry index appended to
+ * the blocking request queue, so we can simply check if the previous request in the
+ * blocking request queue exists.
  *
- * @todo why check the block head
+ * @sa `UpdateDataBufEntryInfoBlockingReq()` and `DATA_BUF_ENTRY`.
  *
  * @param reqSlotTag the request pool entry index of the request to be checked
  * @return unsigned int 1 for pass, 0 for blocked
@@ -560,13 +579,14 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
          */
         else if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NAND)
         {
-            // translate the location vector address to physical address
+            // get physical organization info from VSA
             if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr == REQ_OPT_NAND_ADDR_VSA)
             {
                 dieNo = Vsa2VdieTranslation(reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr);
                 chNo  = Vdie2PchTranslation(dieNo);
                 wayNo = Vdie2PwayTranslation(dieNo);
             }
+            // if the physical organization info is already specified, use it without translating
             else if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr == REQ_OPT_NAND_ADDR_PHY_ORG)
             {
                 chNo  = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalCh;
@@ -587,7 +607,7 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
              * If the request passed the check or no need to be checked, we can just move
              * the request to the `NandReqQ`.
              *
-             * @todo What kinds of requests are need to be checked?
+             * @todo What kinds of requests are need to check the row dep?
              */
             if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck == REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK)
             {
