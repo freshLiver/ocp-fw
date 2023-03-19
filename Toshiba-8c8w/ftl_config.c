@@ -47,6 +47,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 #include <assert.h>
+#include "debug.h"
 #include "xil_printf.h"
 #include "memory_map.h"
 #include "t4nsc_ucode.h"
@@ -71,12 +72,23 @@ void InitFTL()
     InitDataBuf();         //
     InitGcVictimMap();     //
 
+    /*
+     * MB_PER_BLOCK                         == 16384 * 256 / (1024 * 1024) == 4
+     * MB_PER_SSD                           == USER_BLOCKS_PER_DIE * USER_DIES * MB_PER_BLOCK == 524288
+     * MB_PER_MIN_FREE_BLOCK_SPACE          == USER_DIES * MB_PER_BLOCK
+     * MB_PER_OVER_PROVISION_BLOCK_SPACE    == (USER_BLOCKS_PER_DIE * USER_DIES / 10) * MB_PER_BLOCK
+     * BYTES_PER_NVME_BLOCK                 == 4096
+     */
+    pr_info("[Total bad blocks size: %d MB ]\r\n", mbPerbadBlockSpace); // calculated in `RemapBadBlock()`
+    pr_info("[Total min free block size: %d MB ]\r\n", MB_PER_MIN_FREE_BLOCK_SPACE);
+    pr_info("[Total over provision size: %d MB ]\r\n", MB_PER_OVER_PROVISION_BLOCK_SPACE);
+
     storageCapacity_L =
         (MB_PER_SSD - (MB_PER_MIN_FREE_BLOCK_SPACE + mbPerbadBlockSpace + MB_PER_OVER_PROVISION_BLOCK_SPACE)) *
         ((1024 * 1024) / BYTES_PER_NVME_BLOCK);
 
-    xil_printf("[ storage capacity %d MB ]\r\n", storageCapacity_L / ((1024 * 1024) / BYTES_PER_NVME_BLOCK));
-    xil_printf("[ ftl configuration complete. ]\r\n");
+    pr_info("[ storage capacity %d MB ]\r\n", storageCapacity_L / ((1024 * 1024) / BYTES_PER_NVME_BLOCK));
+    pr_info("[ ftl configuration complete. ]\r\n");
 }
 
 static void nfc_install_ucode(unsigned int *bram0)
@@ -208,10 +220,10 @@ void InitNandArray()
         int j;
         unsigned char *idData = (unsigned char *)(TEMPORARY_PAY_LOAD_ADDR + 16);
         V2FReadIdSync(&chCtlReg[i], 0, idData);
-        printf("Ch %d ReadId: ", i);
+        pr_info("Ch %d ReadId: ", i);
         for (j = 0; j < 6; j++)
-            printf("%x ", idData[j]);
-        printf("\r\n");
+            pr_raw("%x ", idData[j]);
+        pr("\r\n");
     }
 
     xil_printf("[ NAND device reset complete. ]\r\n");
