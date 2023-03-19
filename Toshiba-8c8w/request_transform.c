@@ -207,13 +207,13 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
 /**
  * @brief Clear the specified data buffer entry and sync dirty data if needed.
  *
- * In current implementation, the data buffer entry used for a request is determined on
- * the `logicalSliceAddr` of that request, therefore the data buffer entry may be reused.
+ * In current implementation, the write request from host will not write the data directly
+ * to the flash memory, but will cache the data in the data buffer and mark the entry as
+ * dirty entry instead. Therefore, once the data buffer become full, the fw should check
+ * whether the evicted entry is dirty and perform write request if needed before the entry
+ * being evicted.
  *
- * If the data buffer entry need to be reused, we may need to sync the buffer content if
- * the content of the data buffer entry was marked as dirty.
- *
- * @param originReqSlotTag the request pool entry index of the given slice request.
+ * @param originReqSlotTag the request entry index of the data buffer entry to be evicted.
  */
 void EvictDataBufEntry(unsigned int originReqSlotTag)
 {
