@@ -161,14 +161,29 @@ typedef struct _DATA_BUF_INFO
     };
 } DATA_BUF_INFO, *P_DATA_BUF_INFO;
 
+/**
+ * @brief The structure that manages the LBA and LSA info needed by NVMe DMA requests.
+ *
+ * The NVMe block size (4K) is different from slice request size (16K), the firmware thus
+ * may map several NVMe LBAs into same LSA (check `ReqTransNvmeToSlice()` for details) to
+ * align the DMA request size to 16K (LSA size).
+ *
+ * However, this cause the number of NVMe blocks needed by the NVMe DMA requests differ
+ * from 1 to 4. So, to prevent NVMe DMA requests from retrieving wrong data, we should
+ * explicitly specify the starting NVMe block address (`startIndex`), the number of blocks
+ * (`numOfNvmeBlock`), and which LSA offset (`nvmeBlockOffset`) should the first NVMe LBA
+ * align to, in each NVMe DMA request.
+ *
+ * @sa `ReqTransNvmeToSlice()`
+ */
 typedef struct _NVME_DMA_INFO
 {
-    unsigned int startIndex : 16;
-    unsigned int nvmeBlockOffset : 16;
-    unsigned int numOfNvmeBlock : 16;
-    unsigned int reqTail : 8;
-    unsigned int reserved0 : 8;
-    unsigned int overFlowCnt;
+    unsigned int startIndex : 16;      // which NVMe block should the slice request transfer from/to
+    unsigned int nvmeBlockOffset : 16; // which slice request offset should the first NVMe block aligned to
+    unsigned int numOfNvmeBlock : 16;  // how many NVMe blocks should be transferred
+    unsigned int reqTail : 8;          // TODO
+    unsigned int reserved0 : 8;        // reserved
+    unsigned int overFlowCnt;          // TODO
 } NVME_DMA_INFO, *P_NVME_DMA_INFO;
 
 typedef struct _NAND_INFO
@@ -212,7 +227,7 @@ typedef struct _REQ_OPTION
     unsigned int nandAddr : 2;
     unsigned int nandEcc : 1;                // 0 for OFF, 1 for ON
     unsigned int nandEccWarning : 1;         // 0 for OFF, 1 for ON
-    unsigned int rowAddrDependencyCheck : 1; // 0 for NONE, 1 for CHECK
+    unsigned int rowAddrDependencyCheck : 1; // whether this request needs to check dependency.
     unsigned int blockSpace : 1;             // 0 for MAIN, 1 for TOTAL
     unsigned int reserved0 : 24;
 } REQ_OPTION, *P_REQ_OPTION; /* NOTE: 32 bits */
@@ -250,8 +265,8 @@ typedef struct _SSD_REQ_FORMAT
 
     unsigned int prevReq : 16;         // the request pool index of prev request queue entry
     unsigned int nextReq : 16;         // the request pool index of next request queue entry
-    unsigned int prevBlockingReq : 16; // the request pool index of prev blocking request queue entry
-    unsigned int nextBlockingReq : 16; // the request pool index of next blocking request queue entry
+    unsigned int prevBlockingReq : 16; // request entry index of the prev request in blocking request queue
+    unsigned int nextBlockingReq : 16; // request entry index of the next request in blocking request queue
 
     // 4 4 8+4+12+8 8 Bytes
 
