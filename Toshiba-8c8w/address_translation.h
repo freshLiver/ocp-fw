@@ -238,8 +238,8 @@ typedef struct _VIRTUAL_BLOCK_ENTRY
     unsigned int reserved0 : 10;       //
     unsigned int currentPage : 16;     // the current working page number of this block
     unsigned int eraseCnt : 16;        // how many times this block have been erased
-    unsigned int prevBlock : 16;       // TODO
-    unsigned int nextBlock : 16;       // TODO
+    unsigned int prevBlock : 16;       // VBN of the prev block in free/victim block list
+    unsigned int nextBlock : 16;       // VBN of the next block in free/victim block list
 } VIRTUAL_BLOCK_ENTRY, *P_VIRTUAL_BLOCK_ENTRY;
 
 /**
