@@ -413,11 +413,43 @@ unsigned int CheckBufDep(unsigned int reqSlotTag)
 }
 
 /**
- * @brief Check if this request has the row address dependency problem.
+ * @brief Check if this NAND request has the row address dependency problem.
  *
- * @param reqSlotTag the request pool entry index of the request to be checked
- * @param checkRowAddrDepOpt @todo meaning
- * @return unsigned int 1 for pass, 0 for blocked
+ * First, the NAND request should already be assigned a VSA, and we need to translate the
+ * VSA info physical info.
+ *
+ * Now we the physical info of the target address of the specified request, but different
+ * type of request have different dependency problem:
+ *
+ * - For a write request:
+ *
+ *      In current implementation, pages in the same block will be allocated sequentially,
+ *      and thus here we should block all the write requests whose target PBN is not the
+ *      expected page of the current working block on the target die.
+ *
+ * - For a erase request:
+ *
+ *      Before erasing a block, we must ensure that there is no pending read request that
+ *      require access to any of the pages within the target block.
+ *
+ *      @warning What is the use of `programmedPageCnt`?
+ *
+ * - For a read request:
+ *
+ *      Before performing read operation the a block, we should ensure the pending write
+ *      and erase requests are already finished.
+ *
+ * @todo Why the address info of the specified request must be VSA.
+ *
+ * @warning This function may update the count of corresponding block info, but won't add
+ * or remove the given request to or from the row address dependency queue, so use this
+ * function carefully.
+ *
+ * @sa `SyncReleaseEraseReq()`, `UpdateRowAddrDepTableForBufBlockedReq()`.
+ *
+ * @param reqSlotTag The request pool entry index of the request to be checked.
+ * @param checkRowAddrDepOpt Increased or decreased the count of block info.
+ * @return unsigned int The check result, 1 for pass, 0 for blocked.
  */
 unsigned int CheckRowAddrDep(unsigned int reqSlotTag, unsigned int checkRowAddrDepOpt)
 {
@@ -438,9 +470,11 @@ unsigned int CheckRowAddrDep(unsigned int reqSlotTag, unsigned int checkRowAddrD
     {
         if (checkRowAddrDepOpt == ROW_ADDR_DEPENDENCY_CHECK_OPT_SELECT)
         {
+            // release the blocked erase request on the target block
             if (rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].blockedEraseReqFlag)
                 SyncReleaseEraseReq(chNo, wayNo, blockNo);
 
+            // already programed
             if (pageNo < rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].permittedProgPage)
                 return ROW_ADDR_DEPENDENCY_REPORT_PASS;
 
@@ -493,6 +527,23 @@ unsigned int CheckRowAddrDep(unsigned int reqSlotTag, unsigned int checkRowAddrD
     return ROW_ADDR_DEPENDENCY_REPORT_BLOCKED;
 }
 
+/**
+ * @brief Update the dependency info and dispatch the request if possible.
+ *
+ * This function will update the data buffer and row address dependency info of the given
+ * request. If the given request is READ request and have no dependency problem, it will
+ * be dispatched in this function.
+ *
+ * // FIXME: why only update buf dep for READ request? why ignore WRITE request?
+ *
+ * @warning Unlike `CheckRowAddrDep()`, this function may insert the given READ request
+ * into `blockedByRowAddrDepReqQ` and update relevant blocking info directly.
+ *
+ * @sa `CheckRowAddrDep()`, `SelectLowLevelReqQ()`.
+ *
+ * @param reqSlotTag Request entry index of the request to be checked.
+ * @return unsigned int The result of dependency check.
+ */
 unsigned int UpdateRowAddrDepTableForBufBlockedReq(unsigned int reqSlotTag)
 {
     unsigned int dieNo, chNo, wayNo, blockNo, pageNo, bufDepCheckReport;
@@ -512,11 +563,14 @@ unsigned int UpdateRowAddrDepTableForBufBlockedReq(unsigned int reqSlotTag)
     {
         if (rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].blockedEraseReqFlag)
         {
+            // release the blocked erase request on the target block
             SyncReleaseEraseReq(chNo, wayNo, blockNo);
 
+            // check if this request is still blocked by buffer dependency
             bufDepCheckReport = CheckBufDep(reqSlotTag);
             if (bufDepCheckReport == BUF_DEPENDENCY_REPORT_PASS)
             {
+                // check row address dependency problem
                 if (pageNo < rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].permittedProgPage)
                     PutToNandReqQ(reqSlotTag, chNo, wayNo);
                 else
@@ -528,6 +582,7 @@ unsigned int UpdateRowAddrDepTableForBufBlockedReq(unsigned int reqSlotTag)
                 return ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_SYNC;
             }
         }
+        // still blocked by data buffer
         rowAddrDependencyTablePtr->block[chNo][wayNo][blockNo].blockedReadReqCnt++;
     }
     else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_ERASE)
@@ -537,7 +592,42 @@ unsigned int UpdateRowAddrDepTableForBufBlockedReq(unsigned int reqSlotTag)
 }
 
 /**
- * @brief Dispatch the NVMe/NAND request to corresponding request queue.
+ * @brief Dispatch given NVMe/NAND request to corresponding request queue.
+ *
+ * This function is in charge of issuing the given NVMe/NAND request. But before issuing
+ * the request, we should first make sure that this request is safe to be issued.
+ *
+ * We first need to check whether this request is blocked by any other request that uses
+ * the same data buffer (check `UpdateDataBufEntryInfoBlockingReq()` for details).
+ *
+ *  - If the request is not blocked by the blocking request queue, we can start issuing
+ *    the request now, but NVMe/NAND request have different process:
+ *
+ *    - For a NVNe DMA request (Tx from/to data buffer to/from host), we can just issue
+ *      the request and wait for completion.
+ *
+ *    - For a NAND request, we must do something before issuing the request:
+ *
+ *      However, for NAND requests, since there may be some dependency problems between
+ *      the requests (e.g., ERASE cannot be simply reordered before READ), we must check
+ *      this kind of dependency problems (called "row address dependency" here) before
+ *      dispatching the NAND requests by using the function `CheckRowAddrDep()`.
+ *
+ *      Once it was confirmed to have no row address dependency problem on this request,
+ *      the request can then be dispatched; otherwise, the request should be blocked and
+ *      inserted to the row address dependency queue.
+ *
+ *      @note In current implementation, the address format of the request to be check
+ *      must be VSA. So, for requests that using the physical address, the check option
+ *      should be set to `REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK`.
+ *
+ *  - If the request is blocked by data buffer dependency
+ *
+ *      The fw will try to recheck the data buffer dependency problem and release the
+ *      request if possible, by calling `UpdateRowAddrDepTableForBufBlockedReq()`, which
+ *      is similar to `CheckRowAddrDep()`.
+ *
+ * @sa `CheckRowAddrDep()`, `UpdateDataBufEntryInfoBlockingReq()`, `NAND_INFO`.
  *
  * @param reqSlotTag the request pool index of the given request.
  */
@@ -547,36 +637,13 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
 
     bufDepCheckReport = CheckBufDep(reqSlotTag);
 
-    /**
-     * Check if this request can pass the buffer dependency check:
-     *
-     * If the request doesn't have buffer dependency problem, schedule the request and add
-     * to the corresponding request queue based on the request type.
-     *
-     * If the request should be blocked, first check if it also have the row address dep
-     * problem (NAND only), then block the request by inserting to `blockedByBufDep`.
-     */
     if (bufDepCheckReport == BUF_DEPENDENCY_REPORT_PASS)
     {
-        /**
-         * For host requests, just issue the request and then push to the corrsponding
-         * request queue for checking the status of that request later.
-         */
         if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NVME_DMA)
         {
             IssueNvmeDmaReq(reqSlotTag);
             PutToNvmeDmaReqQ(reqSlotTag);
         }
-
-        /**
-         * For NAND request, we may have to translate the address, since the address
-         * format of a request may be VSA (Virtual Slice Address), that is to say the
-         * Location Vector (chNo, wayNo, rowNo/blockNo) mentioned in the paper.
-         *
-         * Sometimes, like the RESET and SET_FEATURE requests sent by `InitNandArray()`,
-         * the given request's address format may not be VSA, so we can easily get the
-         * channel number and the way number by accessing `nandInfo` of the given request.
-         */
         else if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NAND)
         {
             // get physical organization info from VSA
@@ -595,22 +662,10 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
             else
                 assert(!"[WARNING] Not supported reqOpt-nandAddress [WARNING]");
 
-            /**
-             * Flash requests like READ and WRITE may be blocked when the way is busy, so
-             * we have to check the dep of row address and determine whether we have to
-             * block the request.
-             *
-             * If the request can not pass the row dependency check, this request should
-             * be added to the `BlockedByRowAddrDepReqQ` and wait for being released by
-             * calling the function `ReleaseBlockedByBufDepReq()`.
-             *
-             * If the request passed the check or no need to be checked, we can just move
-             * the request to the `NandReqQ`.
-             *
-             * @todo What kinds of requests are need to check the row dep?
-             */
+            // check row address dependency problem before dispatching
             if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck == REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK)
             {
+                // NOTE: VSA translation in `CheckRowAddrDep()` could be skipped
                 rowAddrDepCheckReport = CheckRowAddrDep(reqSlotTag, ROW_ADDR_DEPENDENCY_CHECK_OPT_SELECT);
 
                 if (rowAddrDepCheckReport == ROW_ADDR_DEPENDENCY_REPORT_PASS)
@@ -634,12 +689,12 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
         if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NAND)
             if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck == REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK)
             {
-                // TODO why no need to put to queue
+                // update row addr dep info and insert to `blockedByRowAddrDepReqQ` if needed
                 rowAddrDepTableUpdateReport = UpdateRowAddrDepTableForBufBlockedReq(reqSlotTag);
 
                 if (rowAddrDepTableUpdateReport == ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_DONE)
                 {
-                    // pass, go to PutToBlockedByBufDepReqQ
+                    // no row addr dep problem, so put to blockedByBufDepReqQ
                 }
                 else if (rowAddrDepTableUpdateReport == ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_SYNC)
                     return;
@@ -654,21 +709,22 @@ void SelectLowLevelReqQ(unsigned int reqSlotTag)
 }
 
 /**
- * @brief // TODO
+ * @brief Pop the specified request from the buffer dependency queue.
  *
- * In current implementation, this function only called by `SelectiveGetFromNvmeDmaReqQ()`
- * and `GetFromNandReqQ()` for removing the request from blocking request queue after the
- * request being added into the free request queue.
+ * In the current implementation, this function is only called after the specified request
+ * entry is moved to the free request queue, which means that the previous request has
+ * released the data buffer entry it occupied. Therefore, we now need to update the
+ * relevant information about the data buffer dependency.
  *
- * Therefore, this function can be split into wo parts:
+ * @warning Only the NAND requests with VSA can use this function.
  *
- * 1. Remove the request from the blocking request queue
- * 2.
+ * @warning Since the struct `DATA_BUF_ENTRY` maintains only the tail of blocked requests,
+ * the specified request should be the head of blocked requests to ensure that the request
+ * order is not messed up.
  *
- * @note the target request may fail to issue and be blocked again if it does't pass the
- * row address dependency check.
+ * @sa `UpdateDataBufEntryInfoBlockingReq()`, `CheckBufDep()`, `SSD_REQ_FORMAT`.
  *
- * @param reqSlotTag the request pool entry index of the given request
+ * @param reqSlotTag The request entry index of the given request
  */
 void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
 {
@@ -683,7 +739,7 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
         reqPoolPtr->reqPool[reqSlotTag].nextBlockingReq       = REQ_SLOT_TAG_NONE;
     }
 
-    // if this request is also the tail of blocking request, reset blocking request tail
+    // reset blocking request queue if it is the last request blocked by the buffer dependency
     if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ENTRY)
     {
         if (dataBufMapPtr->dataBuf[reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry].blockingReqTail ==
@@ -699,9 +755,9 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
                 REQ_SLOT_TAG_NONE;
     }
 
-    /**
-     * if the next blocking request of `reqSlotTag` is blocked due to buffer dependency,
-     * remove it from the blocked request queue and try to schedule the request.
+    /*
+     * the specified request is released, so if its next request is only blocked by data
+     * buffer, it can be released now.
      */
     if ((targetReqSlotTag != REQ_SLOT_TAG_NONE) &&
         (reqPoolPtr->reqPool[targetReqSlotTag].reqQueueType == REQ_QUEUE_TYPE_BLOCKED_BY_BUF_DEP))
@@ -715,7 +771,6 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
         }
         else if (reqPoolPtr->reqPool[targetReqSlotTag].reqType == REQ_TYPE_NAND)
         {
-            // TODO location vector translation ?
             if (reqPoolPtr->reqPool[targetReqSlotTag].reqOpt.nandAddr == REQ_OPT_NAND_ADDR_VSA)
             {
                 dieNo = Vsa2VdieTranslation(reqPoolPtr->reqPool[targetReqSlotTag].nandInfo.virtualSliceAddr);
@@ -725,7 +780,7 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
             else
                 assert(!"[WARNING] Not supported reqOpt-nandAddress [WARNING]");
 
-            // check the row address dependency if the flag was set
+            // check the row address dependency if needed
             if (reqPoolPtr->reqPool[targetReqSlotTag].reqOpt.rowAddrDependencyCheck ==
                 REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK)
             {
@@ -748,18 +803,19 @@ void ReleaseBlockedByBufDepReq(unsigned int reqSlotTag)
 }
 
 /**
- * @brief Try to release some request in the `blockedByRowAddrDepReqQ` of specified die.
+ * @brief Update the row address dependency of all the requests on the specified die.
  *
- * Traverse the `blockedByRowAddrDepReqQ` of the specified die, and then release all the
- * requests that can pass the row address dependency check.
+ * Traverse the `blockedByRowAddrDepReqQ` of the specified die, and then recheck the row
+ * address dependency for all the requests on that die. When a request is found that it
+ * can pass the dependency check, it will be dispatched (move to the NAND request queue).
  *
- * @note the word `RELEASE` means the requests will be moved to the NAND request queue,
- * instead of executing it right away.
+ * By updating the row address dependency info, some requests on the target die may be
+ * released.
  *
- * @note if a request is no need to be checked, it should not in this queue!
+ * @sa `CheckRowAddrDep()`.
  *
- * @param chNo the channel number of the specified queue.
- * @param wayNo the way number of the specified queue.
+ * @param chNo The channel number of the specified die.
+ * @param wayNo The way number of the specified die.
  */
 void ReleaseBlockedByRowAddrDepReq(unsigned int chNo, unsigned int wayNo)
 {

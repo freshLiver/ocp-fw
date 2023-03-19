@@ -190,7 +190,7 @@ typedef struct _NAND_INFO
 {
     union
     {
-        unsigned int virtualSliceAddr; // TODO location vector?
+        unsigned int virtualSliceAddr; // location vector mention in paper
         struct
         {
             unsigned int physicalCh : 4;

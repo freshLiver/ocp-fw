@@ -52,8 +52,8 @@
 #define NVME_COMMAND_AUTO_COMPLETION_OFF 0
 #define NVME_COMMAND_AUTO_COMPLETION_ON  1
 
-#define ROW_ADDR_DEPENDENCY_CHECK_OPT_SELECT  0 // TODO: meaning??
-#define ROW_ADDR_DEPENDENCY_CHECK_OPT_RELEASE 1 // TODO: meaning??
+#define ROW_ADDR_DEPENDENCY_CHECK_OPT_SELECT  0 // may need to increase the count of block info
+#define ROW_ADDR_DEPENDENCY_CHECK_OPT_RELEASE 1 // may need to decrease the count of block info
 
 #define BUF_DEPENDENCY_REPORT_BLOCKED 0
 #define BUF_DEPENDENCY_REPORT_PASS    1
@@ -61,17 +61,33 @@
 #define ROW_ADDR_DEPENDENCY_REPORT_BLOCKED 0
 #define ROW_ADDR_DEPENDENCY_REPORT_PASS    1
 
-#define ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_DONE 0
-#define ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_SYNC 1
+#define ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_DONE 0 // still blocked by buffer dependency
+#define ROW_ADDR_DEPENDENCY_TABLE_UPDATE_REPORT_SYNC 1 // buffer dependency info updated
 
+/**
+ * @brief The dependency info of this physical block.
+ *
+ * To ensure the integrity of the data will not affected by the scheduler, the fw should
+ * maintain some information for each flash block to avoid situations such as the erase
+ * request was being reorderd before the read requests.
+ *
+ * @note important for scheduling
+ *
+ * @sa `CheckRowAddrDep()`, `UpdateRowAddrDepTableForBufBlockedReq()`.
+ */
 typedef struct _ROW_ADDR_DEPENDENCY_ENTRY
 {
-    unsigned int permittedProgPage : 12;
-    unsigned int blockedReadReqCnt : 16;
-    unsigned int blockedEraseReqFlag : 1;
+    unsigned int permittedProgPage : 12;  // the next page number to be programed in this block
+    unsigned int blockedReadReqCnt : 16;  // the number of blocked read request on this block
+    unsigned int blockedEraseReqFlag : 1; // 1 if there is erase request blocked by the read request
     unsigned int reserved0 : 3;
 } ROW_ADDR_DEPENDENCY_ENTRY, *P_ROW_ADDR_DEPENDENCY_ENTRY;
 
+/**
+ * @brief The row address dependency table for all the user blocks.
+ *
+ * @sa `ROW_ADDR_DEPENDENCY_ENTRY`.
+ */
 typedef struct _ROW_ADDR_DEPENDENCY_TABLE
 {
     ROW_ADDR_DEPENDENCY_ENTRY block[USER_CHANNELS][USER_WAYS][MAIN_BLOCKS_PER_DIE];

@@ -157,15 +157,19 @@ void SyncAvailFreeReq()
 }
 
 /**
- * @brief
+ * @brief Issuing requests until the specified block can be erased.
  *
- * @todo
+ * Sometimes, a request on a block may be blocked by the previous erase request on the
+ * same block. However, the erase request may also blocked by the previous read requests.
  *
- * Similar to `SyncAllLowLevelReqDone()`, but
+ * So, this function will try to release the pending requests on the specified block that
+ * is blocked by the pending erase request.
  *
- * @param chNo
- * @param wayNo
- * @param blockNo
+ * @sa `CheckRowAddrDep()`, `UpdateRowAddrDepTableForBufBlockedReq()`.
+ *
+ * @param chNo The channel number of the target block.
+ * @param wayNo The way number of the target channel.
+ * @param blockNo The block number of the target die.
  */
 void SyncReleaseEraseReq(unsigned int chNo, unsigned int wayNo, unsigned int blockNo)
 {
