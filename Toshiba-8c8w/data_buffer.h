@@ -194,4 +194,20 @@ extern DATA_BUF_LRU_LIST dataBufLruList;
 extern P_DATA_BUF_HASH_TABLE dataBufHashTable;
 extern P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 
+/* -------------------------------------------------------------------------- */
+/*                   util macros for data buffer related ops                  */
+/* -------------------------------------------------------------------------- */
+
+#define BUF_ENTRY(iEntry)      (&dataBufMapPtr->dataBuf[(iEntry)])
+#define BUF_HEAD_ENTRY()       (BUF_ENTRY(dataBufLruList.headEntry))
+#define BUF_NEXT_ENTRY(iEntry) (BUF_ENTRY(BUF_ENTRY((iEntry))->nextEntry))
+#define BUF_HEAD_IDX()         (dataBufLruList.headEntry)
+#define BUF_TAIL_IDX()         (dataBufLruList.tailEntry)
+#define BUF_PREV_IDX(iEntry)   (BUF_ENTRY((iEntry))->prevEntry)
+#define BUF_NEXT_IDX(iEntry)   (BUF_ENTRY((iEntry))->nextEntry)
+
+#define H_BUF_ENTRY(iEntry)      (&dataBufHashTablePtr->dataBufHash[(iEntry)])
+#define H_BUF_HEAD_ENTRY(iEntry) (BUF_ENTRY(H_BUF_ENTRY((iEntry))->headEntry))
+#define H_BUF_HEAD_IDX(iEntry)   (H_BUF_ENTRY((iEntry))->headEntry)
+
 #endif /* DATA_BUFFER_H_ */

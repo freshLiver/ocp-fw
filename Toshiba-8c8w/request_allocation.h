@@ -74,40 +74,6 @@ typedef struct _REQ_POOL
     SSD_REQ_FORMAT reqPool[AVAILABLE_OUNTSTANDING_REQ_COUNT];
 } REQ_POOL, *P_REQ_POOL;
 
-/* -------------------------------------------------------------------------- */
-/*                     some utile macros for request pool                     */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Get the request pool entry at specified position
- *
- * @param index the request pool entry index of the request you want
- * @return SSD_REQ_FORMAT the request pool entry
- */
-#define ReqPool(index) (reqPoolPtr->reqPool[(index)])
-
-/**
- * @brief Check the request type of the given request pool entry index
- *
- * @param idx the request pool entry index of the request to be checked
- * @param type the supposed type of this request
- * @return bool true if `reqType` == `type`, otherwise false
- */
-#define CHECK_REQ_TYPE(idx, type) (ReqPool(idx).reqType == (type))
-
-/**
- * @brief Check the request queue type of the given request pool entry index
- *
- * @param idx the request pool entry index of the request to be checked
- * @param type the supposed queue type of this request
- * @return bool true if `reqType` == `type`, otherwise false
- */
-#define CHECK_REQ_QUEUE_TYPE(idx, qType) (ReqPool(idx).reqQueueType == (qType))
-
-/* -------------------------------------------------------------------------- */
-/*                    no more utile macros for request pool                   */
-/* -------------------------------------------------------------------------- */
-
 void InitReqPool();
 
 void PutToFreeReqQ(unsigned int reqSlotTag);
@@ -138,5 +104,34 @@ extern NAND_REQUEST_QUEUE nandReqQ[USER_CHANNELS][USER_WAYS];
 
 extern unsigned int notCompletedNandReqCnt;
 extern unsigned int blockedReqCnt;
+
+/* -------------------------------------------------------------------------- */
+/*                  util macros for request pool related ops                  */
+/* -------------------------------------------------------------------------- */
+/**
+ * @brief Get the request entry by entry index.
+ *
+ * @param index Index of request pool entry.
+ * @return The address of request pool entry.
+ */
+#define REQ_ENTRY(iEntry) (&reqPoolPtr->reqPool[(iEntry)])
+
+/**
+ * @brief Check the request type of the given request pool entry index
+ *
+ * @param idx the request pool entry index of the request to be checked
+ * @param type the supposed type of this request
+ * @return bool true if `reqType` == `type`, otherwise false
+ */
+#define CHECK_REQ_TYPE(idx, type) (REQ_ENTRY(idx).reqType == (type))
+
+/**
+ * @brief Check the request queue type of the given request pool entry index
+ *
+ * @param idx the request pool entry index of the request to be checked
+ * @param type the supposed queue type of this request
+ * @return bool true if `reqType` == `type`, otherwise false
+ */
+#define CHECK_REQ_QUEUE_TYPE(idx, qType) (REQ_ENTRY(idx).reqQueueType == (qType))
 
 #endif /* REQUEST_ALLOCATION_H_ */
