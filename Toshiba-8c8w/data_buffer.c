@@ -248,20 +248,22 @@ unsigned int AllocateDataBuf()
 }
 
 /**
- * @brief Append the request to the blocking queue specified by given buffer entry.
+ * @brief Append the request to the blocking queue of the specified data buffer entry.
  *
- * The two blocking request queue only records the request pool entry index of the first
- * (head) and last (tail) request in the queue, so we need to use `prevBlockingReq` and
- * `nextBlockingReq` of the request pool entry and the `blockingReqTail` of data buffer
- * entry to maintain the blocking queue.
+ * In current fw implementation, a slice request may be split into several sub-requests,
+ * and these sub-requests can share the same data buffer since they must be executed in
+ * correct order.
  *
- * @note the blocking request queue where the specified request to be inserted to is
- * specified by the `blockingReqTail`.
+ * However, since the scheduler may reorder the requests base on the priority, the fw must
+ * make sure these sub-requests are executed in the correct order. To do this, each data
+ * buffer entry maintains a blocking request queue (`DATA_BUF_ENTRY::blockingReqTail`).
+ * Whenever a new request is created, its request entry index will be appended to the
+ * blocking queue of the data buffer allocated for it.
  *
- * @warning why need this?
+ * @sa `ReqTransSliceToLowLevel()`, `CheckBufDep()`, `SelectLowLevelReqQ()` and `DATA_BUF_ENTRY`.
  *
- * @param byfEntry the data buffer entry index of the specified request
- * @param reqSlotTag the request pool entry index of the request to be
+ * @param byfEntry The data buffer entry index of the newly created request.
+ * @param reqSlotTag The request pool entry index of the newly created request.
  */
 void UpdateDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSlotTag)
 {

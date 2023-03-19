@@ -46,6 +46,7 @@
 #ifndef DATA_BUFFER_H_
 #define DATA_BUFFER_H_
 
+#include "stdint.h"
 #include "ftl_config.h"
 
 // the data buffer entries for each die, default 16
@@ -62,23 +63,50 @@
 /**
  * @brief The structure of the data buffer entry.
  *
- * Basically following information:
+ * Since only a limited number of data buffer entries could be maintained in DRAM, the fw
+ * must reuse the data buffer entries by maintaining a LRU list which is consist of data
+ * buffer entries.
  *
- * - the logical address of the underlying slice command
- * - whether is buffer entry dirty or not
- * - the prev/next entry index of this data buffer entry in the LRU list
- * - the prev/next entry index of this data buffer entry in the data buffer bucket
- * - the request pool entry index of tail request in the blocking request queue
+ * The nodes of the LRU list are linked using the two members `prevEntry` and `nextEntry`
+ * of this structure.
+ *
+ *  - When a data buffer entry is allocated to a request, the allocated data buffer entry
+ *    will be move to the head of the LRU list.
+ *
+ *  - When there is no free data buffer entry can be used to serve the newly created slice
+ *    request, the fw will reuse the tail entry of the LRU list, and evict the data if the
+ *    flag `dirty` of that entry is marked as true.
+ *
+ *  - Besides storing the data needed by the requests, the data buffer entries are also
+ *    used as cache to speed up the read/write requests. When a new request is created
+ *    the fw should first check if there is any data buffer entry cached the data needed
+ *    by the new request (check `ReqTransSliceToLowLevel()` and `CheckDataBufHit()` for
+ *    details).
+ *
+ *    However, if we simply traverse the LRU list every time we want to check the data
+ *    buffer, it may be too slow. Therefore, in current implementation, the fw maintains
+ *    a hash table to reduce the overhead for searching the target data buffer entry that
+ *    owns the data of target LBA. And the nodes of the hash table are linked together by
+ *    using the two members `hashPrevEntry` and `hashNextEntry` of this structure.
+ *
+ * @sa `AllocateDataBuf()`, `CheckDataBufHit()`, `EvictDataBufEntry()`.
+ *
+ * Also, since a data buffer may be shared by several requests, every data buffer entry
+ * maintains a blocking request queue (by using `SSD_REQ_FORMAT::(prev|next)BlockingReq`,
+ * and `DATA_BUF_ENTRY::blockingReqTail`) to make sure the requests will be executed in
+ * correct order (check `UpdateDataBufEntryInfoBlockingReq()` for details).
+ *
+ * @sa `UpdateDataBufEntryInfoBlockingReq()`.
  */
 typedef struct _DATA_BUF_ENTRY
 {
-    unsigned int logicalSliceAddr;     // the logical address of the underlying slice command
+    unsigned int logicalSliceAddr;     // the LSA of the request that owns this buffer
     unsigned int prevEntry : 16;       // the index of pref entry in the dataBuf
     unsigned int nextEntry : 16;       // the index of next entry in the dataBuf
     unsigned int blockingReqTail : 16; // the request pool entry index of the last blocking request
-    unsigned int hashPrevEntry : 16;   // the index of prev entry in the bucket
-    unsigned int hashNextEntry : 16;   // the index of next entry in the bucket
-    unsigned int dirty : 1;            // whether this entry is dirty or not (clean)
+    unsigned int hashPrevEntry : 16;   // the index of the prev data buffer entry in the bucket
+    unsigned int hashNextEntry : 16;   // the index of the next data buffer entry in the bucket
+    unsigned int dirty : 1;            // whether this data buffer entry is dirty or not (clean)
     unsigned int reserved0 : 15;
 } DATA_BUF_ENTRY, *P_DATA_BUF_ENTRY;
 
