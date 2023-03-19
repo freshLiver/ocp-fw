@@ -866,9 +866,16 @@ unsigned int AddrTransRead(unsigned int logicalSliceAddr)
 }
 
 /**
- * @brief Assign a new virtual slice for the given logical slice.
+ * @brief Assign a new virtual (physical) page to the specified logical page.
  *
- * @note The old virtual slice will be invalidated during this function.
+ * Before issuing the write request, we should allocate a physical page for the specified
+ * logical page and invalidate the old physical page if it exists.
+ *
+ * @note In current implementation, if the target page of a write request is not empty, a
+ * read request on the target page will be issued automatically before the write request,
+ * therefore, we don't have to handle data migration in this function.
+ *
+ * @sa `ReqTransSliceToLowLevel()`.
  *
  * @param logicalSliceAddr the logical address of the target slice.
  * @return unsigned int the renewed virtual slice address for the given logical slice.
@@ -893,12 +900,44 @@ unsigned int AddrTransWrite(unsigned int logicalSliceAddr)
 }
 
 /**
- * @brief Assign a virtual slice to the current working page.
+ * @brief Select a free physical page (virtual slice).
  *
- * If the current working block of the target die is full, try to allocate a new block.
+ * In current implementation, the target page to serve the write request is determined by
+ * checking the following three variables:
  *
- * @todo
+ *  - `sliceAllocationTargetDie`:
  *
+ *      The die where the next request should be issued to.
+ *
+ *      To exploit the parallelism of each die, especially under write-intensive workload,
+ *      the write requests will be interleaved to each die.
+ *
+ *      Check `FindDieForFreeSliceAllocation()` for details.
+ *
+ *  - `VIRTUAL_DIE_ENTRY::currentBlock`:
+ *
+ *      The current working block of the target die.
+ *
+ *      Each die maintains a current working block and will select a page from the current
+ *      working block of target die to serve the write request. Once all the pages of the
+ *      current working block are used, the fw will select a new free block from the free
+ *      block list as the new current working block of that die.
+ *
+ *      If there the free block list of that die is empty, the fw will try to release
+ *      invalid blocks by doing GC.
+ *
+ *      Check `GetFromFbList()` and `GarbageCollection()` for the details.
+ *
+ *  - `VIRTUAL_BLOCK_ENTRY::currentPage`:
+ *
+ *      The current working page of the current working block on the die.
+ *
+ *      Current implementation just selects the free page sequentially from the current
+ *      working block.
+ *
+ * @sa `VIRTUAL_DIE_ENTRY`, `VIRTUAL_BLOCK_ENTRY`, `FindDieForFreeSliceAllocation()`.
+ *
+ * @warning why the `currentPage` might be full after GC?
  * @warning why assign dieNo before return? redundant?
  *
  * @return unsigned int the VSA for the request.
@@ -922,6 +961,7 @@ unsigned int FindFreeVirtualSlice()
             GarbageCollection(dieNo);
             currentBlock = virtualDieMapPtr->die[dieNo].currentBlock;
 
+            // FIXME: why need to check whether `currentPage` is full?
             if (virtualBlockMapPtr->block[dieNo][currentBlock].currentPage == USER_PAGES_PER_BLOCK)
             {
                 currentBlock = GetFromFbList(dieNo, GET_FREE_BLOCK_NORMAL);
@@ -940,8 +980,8 @@ unsigned int FindFreeVirtualSlice()
     virtualSliceAddr =
         Vorg2VsaTranslation(dieNo, currentBlock, virtualBlockMapPtr->block[dieNo][currentBlock].currentPage);
     virtualBlockMapPtr->block[dieNo][currentBlock].currentPage++;
-    sliceAllocationTargetDie = FindDieForFreeSliceAllocation();
-    dieNo                    = sliceAllocationTargetDie;
+    sliceAllocationTargetDie = FindDieForFreeSliceAllocation(); // sliceAllocationTargetDie should be updated
+    dieNo                    = sliceAllocationTargetDie;        // don't merge the 2 lines
     return virtualSliceAddr;
 }
 
@@ -978,22 +1018,15 @@ unsigned int FindFreeVirtualSliceForGc(unsigned int copyTargetDieNo, unsigned in
 }
 
 /**
- * @brief Choose a die for
+ * @brief Update and get the die number to serve the next write request.
  *
- * The rule to choose a die is:
- *
- * C0W0 -> C1W0 -> ... -> C7W0 ->
- * C0W1 -> C1W1 -> ... -> C7W1 ->
- * ...
- * C0W7 -> C1W7 -> ... -> C7W7 ->
- * C0W0 -> C1W0 -> ... -> C7W0 ->
- * ...
- *
- * So the allocation will be interleaved on channel first.
+ * To exploit the parallelism, the write request should first be interleaved on different
+ * channels to take advantage of the channel parallelism. If all the channels' same way
+ * are used, select the next way of each channel to use the die parallelism.
  *
  * @warning As paper the mentioned, may not perform well if latency largely varied.
  *
- * @return unsigned int the die number of the chosen die.
+ * @return unsigned int The target die number.
  */
 unsigned int FindDieForFreeSliceAllocation()
 {
@@ -1014,6 +1047,19 @@ unsigned int FindDieForFreeSliceAllocation()
     return targetDie;
 }
 
+/**
+ * @brief Invalidate the specified virtual page.
+ *
+ * Overwriting cannot perform on physical flash cell, so the fw must handle out-of-place
+ * update.
+ *
+ * This function is used for invalidate the corresponding physical page of the specified
+ * logical page, but in case there was no physical page allocated on the logical page
+ * before, we should check if the corresponding physical page exists before doing GC on
+ * the invalidated physical page.
+ *
+ * @param logicalSliceAddr LSA that specifies the virtual slice to be invalidated.
+ */
 void InvalidateOldVsa(unsigned int logicalSliceAddr)
 {
     unsigned int virtualSliceAddr, dieNo, blockNo;
@@ -1115,14 +1161,15 @@ void PutToFbList(unsigned int dieNo, unsigned int blockNo)
 /**
  * @brief Pop the first block in the free block list of the specified die.
  *
- * The chosen block may be used for normal request (`GET_FREE_BLOCK_NORMAL`) or GC request
- * (`GET_FREE_BLOCK_GC`),
+ * @note Each die will reserve some free blocks (`VIRTUAL_DIE_ENTRY::freeBlockCnt`), so if
+ * the number of free blocks is less then the number of preserved blocks, `BLOCK_FAIL`
+ * will be returned.
  *
- * @todo @note If the
+ * @todo Difference between `GET_FREE_BLOCK_NORMAL` and `GET_FREE_BLOCK_GC`.
  *
- * @param dieNo the target die number.
- * @param getFreeBlockOption
- * @return unsigned int the virtual block map index of the evicted block.
+ * @param dieNo The target die number.
+ * @param getFreeBlockOption //TODO
+ * @return unsigned int The virtual block address of the evicted block.
  */
 unsigned int GetFromFbList(unsigned int dieNo, unsigned int getFreeBlockOption)
 {
