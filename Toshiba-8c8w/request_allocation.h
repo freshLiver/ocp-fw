@@ -115,6 +115,8 @@ extern unsigned int blockedReqCnt;
  * @return The address of request pool entry.
  */
 #define REQ_ENTRY(iEntry) (&reqPoolPtr->reqPool[(iEntry)])
+#define REQ_BUF(iEntry)   (REQ_ENTRY((iEntry))->dataBufInfo.entry)
+#define REQ_VSA(iEntry)   (REQ_ENTRY((iEntry))->nandInfo.virtualSliceAddr)
 
 /**
  * @brief Check the request type of the given request pool entry index

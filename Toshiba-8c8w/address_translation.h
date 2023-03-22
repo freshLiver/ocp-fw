@@ -356,19 +356,24 @@ extern unsigned int mbPerbadBlockSpace;
 /*                   util macros for translation related ops                  */
 /* -------------------------------------------------------------------------- */
 
-#define VDIE_ENTRY(iDie)          (&virtualDieMapPtr->die[(iDie)])
-#define VDIE_PREV_IDX(iDie)       (VDIE_ENTRY(iDie)->prevDie)
-#define VDIE_NEXT_IDX(iDie)       (VDIE_ENTRY(iDie)->nextDie)
-#define VBLK_ENTRY(iDie, iBlk)    (&virtualBlockMapPtr->block[(iDie)][(iBlk)])
-#define VBLK_PREV_IDX(iDie, iBlk) (VBLK_ENTRY(iDie, iBlk)->prevBlock)
-#define VBLK_NEXT_IDX(iDie, iBlk) (VBLK_ENTRY(iDie, iBlk)->nextBlock)
-#define PBLK_ENTRY(iDie, iBlk)    (&phyBlockMapPtr->phyBlock[(iDie)][(iBlk)])
+#define VDIE_ENTRY(iDie)      (&virtualDieMapPtr->die[(iDie)])
+#define VDIE_PREV_IDX(iDie)   (VDIE_ENTRY((iDie))->prevDie)
+#define VDIE_NEXT_IDX(iDie)   (VDIE_ENTRY((iDie))->nextDie)
+#define VDIE_PREV_ENTRY(iDie) (VDIE_ENTRY(VDIE_PREV_IDX((iDie))))
+#define VDIE_NEXT_ENTRY(iDie) (VDIE_ENTRY(VDIE_NEXT_IDX((iDie))))
+
+#define VBLK_ENTRY(iDie, iBlk)      (&virtualBlockMapPtr->block[(iDie)][(iBlk)])
+#define VBLK_PREV_IDX(iDie, iBlk)   (VBLK_ENTRY((iDie), (iBlk))->prevBlock)
+#define VBLK_NEXT_IDX(iDie, iBlk)   (VBLK_ENTRY((iDie), (iBlk))->nextBlock)
+#define VBLK_PREV_ENTRY(iDie, iBlk) (VBLK_ENTRY((iDie), VBLK_PREV_IDX((iDie), (iBlk))))
+#define VBLK_NEXT_ENTRY(iDie, iBlk) (VBLK_ENTRY((iDie), VBLK_NEXT_IDX((iDie), (iBlk))))
+#define PBLK_ENTRY(iDie, iBlk)      (&phyBlockMapPtr->phyBlock[(iDie)][(iBlk)])
 
 #define LSA_ENTRY(lsa)   (&logicalSliceMapPtr->logicalSlice[(lsa)])
 #define VSA_ENTRY(vsa)   (&virtualSliceMapPtr->virtualSlice[(vsa)])
 #define LSA2VSA(lsa)     (LSA_ENTRY((lsa))->virtualSliceAddr)
 #define VSA2LSA(vsa)     (VSA_ENTRY((vsa))->logicalSliceAddr)
-#define VBA2PBA_MBS(vba) (Vblock2PblockOfMbsTranslation(vba))
-#define VBA2PBA_TBS(vba) (Vblock2PblockOfTbsTranslation(vba))
+#define VBA2PBA_MBS(vba) (Vblock2PblockOfMbsTranslation((vba)))
+#define VBA2PBA_TBS(vba) (Vblock2PblockOfTbsTranslation((vba)))
 
 #endif /* ADDRESS_TRANSLATION_H_ */
