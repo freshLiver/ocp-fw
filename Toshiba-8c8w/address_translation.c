@@ -46,8 +46,10 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 #include <assert.h>
-#include "memory_map.h"
+#include "debug.h"
 #include "xil_printf.h"
+
+#include "memory_map.h"
 
 P_LOGICAL_SLICE_MAP logicalSliceMapPtr;
 P_VIRTUAL_SLICE_MAP virtualSliceMapPtr;

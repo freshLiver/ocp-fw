@@ -67,7 +67,13 @@
 #define CODE_POS_ARGS __func__, __FILE__, __LINE__
 #define SPLIT_LINE    "-----------------------------------------------------------------------------\n"
 
-#define printf       xil_printf
+#ifdef HOST_DEBUG
+#include <stdio.h>
+#define xil_printf printf
+#else
+#define printf xil_printf
+#endif
+
 #define pr_raw       xil_printf
 #define pr(fmt, ...) pr_raw(fmt "\r\n", ##__VA_ARGS__)
 

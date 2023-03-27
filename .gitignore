@@ -1,8 +1,18 @@
-# Doxygen configs
-docs/
-theme/
+*
+# ignore all except:
 
-# workspace configs
-.vscode/
-.github/
-ocp-fw.code-workspace
+# codes:
+!Toshiba-8c8w/
+!Toshiba-8c8w/**
+
+!bsp/
+!bsp/**
+
+!Makefile
+
+# configs:
+!.gitignore
+!.ycm_extra_conf.py
+
+# docs:
+!README.md
