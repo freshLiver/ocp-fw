@@ -105,4 +105,10 @@ void ReleaseBlockedByRowAddrDepReq(unsigned int chNo, unsigned int wayNo);
 
 extern P_ROW_ADDR_DEPENDENCY_TABLE rowAddrDependencyTablePtr;
 
+/* -------------------------------------------------------------------------- */
+/*                     util macros for request scheduling                     */
+/* -------------------------------------------------------------------------- */
+
+#define ROW_ADDR_DEP_ENTRY(iCh, iWay, iBlk) (&rowAddrDependencyTablePtr->block[(iCh)][(iWay)][(iBlk)])
+
 #endif /* REQUEST_TRANSFORM_H_ */

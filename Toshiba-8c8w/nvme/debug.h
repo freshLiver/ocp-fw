@@ -85,6 +85,12 @@
 #define pr_info(fmt, ...)  pr(PR_INFO PR_RESET fmt, ##__VA_ARGS__)
 #define pr_error(fmt, ...) pr(PR_ERROR CODE_POS_FMT PR_RESET fmt, CODE_POS_ARGS, ##__VA_ARGS__)
 
+/* -------------------------------------------------------------------------- */
+/*                              debugging macros                              */
+/* -------------------------------------------------------------------------- */
+
+#define MEMBER_SIZE(type, mem) (sizeof((((type *)0)->mem)))
+
 #define ASSERT(cond, ...)                                                                                         \
     if (!(cond))                                                                                                  \
     {                                                                                                             \
@@ -92,5 +98,8 @@
         while (1)                                                                                                 \
             ;                                                                                                     \
     }
+
+// raise compiler error when (cond == 0), must place in a function
+#define STATIC_ASSERT(cond) ((int)(sizeof(struct { int : (-!(cond)); })))
 
 #endif
