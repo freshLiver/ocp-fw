@@ -98,9 +98,9 @@
  * a data buffer entry for this request (e.g., ERASE, RESET, SET_FEATURE).
  */
 
-#define REQ_OPT_DATA_BUF_ENTRY      0 // the data stored in `dataBufFormat` is buffer index.
-#define REQ_OPT_DATA_BUF_TEMP_ENTRY 1 // the data stored in `dataBufFormat` is buffer index.
-#define REQ_OPT_DATA_BUF_ADDR       2 // the data stored in `dataBufFormat` is buffer address.
+#define REQ_OPT_DATA_BUF_ENTRY      0 // View `dataBufFormat` as buffer entry index, used by most requests.
+#define REQ_OPT_DATA_BUF_TEMP_ENTRY 1 // View `dataBufFormat` as buffer entry index, used by GC only.
+#define REQ_OPT_DATA_BUF_ADDR       2 // View `dataBufFormat` as DRAM address, currently used by BBT only.
 #define REQ_OPT_DATA_BUF_NONE       3 // for ERASE, RESET, SET_FEATURE (no buffer needed).
 
 #define REQ_OPT_NAND_ADDR_VSA     0 // the data stored in `nandInfo` is Virtual Slice Address.
@@ -156,7 +156,7 @@ typedef struct _DATA_BUF_INFO
 {
     union
     {
-        unsigned int addr;  // real buffer address
+        unsigned int addr;  // real buffer address (16384+256 bytes for data and spare region)
         unsigned int entry; // data buffer entry index
     };
 } DATA_BUF_INFO, *P_DATA_BUF_INFO;

@@ -1151,11 +1151,12 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
  *
  *      Since the real data buffer entry have the same size with NAND page size, and we
  *      have already found the entry index, we can just multiply the index by the page
- *      size defined by `BYTES_PER_DATA_REGION_OF_SLICE`.
+ *      size defined by `BYTES_PER_DATA_REGION_OF_SLICE` to get the starting address of
+ *      the corresponding data buffer of the given data buffer entry.
  *
  *      However, if the request is a NVMe request, we should do some extra works. Since
  *      the unit size of NVMe block is 4K, which is one-fourth of the page size, if the
- *      LBA didn't align by 4, we have to move N*4K bytes within the real data buffer
+ *      LBA didn't align by 4, we have to move (N*4K) bytes within the real data buffer
  *      entry by using the offset to find the address corresponding to the NVMe block.
  *
  * @param reqSlotTag the request data buffer entry index
@@ -1174,15 +1175,15 @@ unsigned int GenerateDataBufAddr(unsigned int reqSlotTag)
         else if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
             return reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr;
 
-        /**
-         * For some requests like RESET, SET_FEATURE and ERASE, the
-         * they won't use the data
-         * buffer. Therefore we just assign a reserved buffer for them.
+        /*
+         * For some requests not belongs to I/O requests, such as RESET, SET_FEATURE and
+         * ERASE, the fw just assign a reserved buffer for these requests.
          */
         return RESERVED_DATA_BUFFER_BASE_ADDR;
     }
     else if (reqPoolPtr->reqPool[reqSlotTag].reqType == REQ_TYPE_NVME_DMA)
     {
+        // similar to NAND request, but may have offset
         if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ENTRY)
             return (DATA_BUFFER_BASE_ADDR +
                     reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry * BYTES_PER_DATA_REGION_OF_SLICE +
