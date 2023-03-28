@@ -1073,6 +1073,8 @@ void IssueNandReq(unsigned int chNo, unsigned int wayNo)
  * If the address is VSA, we should convert it to the physical address by doing address
  * translation.
  *
+ * @warning Toshiba NAND only have SLC mode?
+ *
  * @param reqSlotTag the request pool index of the target request.
  * @return unsigned int the nand row address for the target request.
  */
@@ -1089,7 +1091,6 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
         tempBlockNo    = phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].remappedPhyBlock % TOTAL_BLOCKS_PER_LUN;
         tempPageNo     = Vsa2VpageTranslation(reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr);
 
-        // FIXME for SLC mode, use the LSB page of MLC page?
         // if(BITS_PER_FLASH_CELL == SLC_MODE)
         //	tempPageNo = Vpage2PlsbPageTranslation(tempPageNo);
     }
@@ -1105,7 +1106,6 @@ unsigned int GenerateNandRowAddr(unsigned int reqSlotTag)
         }
         else if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace == REQ_OPT_BLOCK_SPACE_MAIN)
         {
-            // FIXME: why not use `USER_BLOCKS_PER_LUN`
             lun         = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock / MAIN_BLOCKS_PER_LUN;
             tempBlockNo = reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock % MAIN_BLOCKS_PER_LUN +
                           lun * TOTAL_BLOCKS_PER_LUN;

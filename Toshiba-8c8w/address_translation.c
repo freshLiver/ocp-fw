@@ -90,7 +90,7 @@ void InitAddressMap()
     phyBlockMapPtr     = (P_PHY_BLOCK_MAP)PHY_BLOCK_MAP_ADDR;
     bbtInfoMapPtr      = (P_BAD_BLOCK_TABLE_INFO_MAP)BAD_BLOCK_TABLE_INFO_MAP_ADDR;
 
-    // init phyblockMap
+    // reset physical block mapping and bad block info
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
         // the blocks should not be remapped to any other blocks before remmaping
@@ -134,7 +134,7 @@ void InitSliceMap()
  * each die and try to replace the bad block in the user blocks on that die with the
  * reserved blocks.
  *
- * @bug use array to simplify lun0 and lun1
+ * @todo use array to simplify lun0 and lun1
  */
 void RemapBadBlock()
 {
@@ -162,11 +162,13 @@ void RemapBadBlock()
             {
                 if (reservedBlockOfLun0[dieNo] < TOTAL_BLOCKS_PER_LUN)
                 {
-                    // sequentially find a reserved non-bad block to replace the bad block
+                    // sequentially find a non-bad reserved block to replace the bad user block
                     remapFlag = 1;
                     while (phyBlockMapPtr->phyBlock[dieNo][reservedBlockOfLun0[dieNo]].bad)
                     {
                         reservedBlockOfLun0[dieNo]++;
+
+                        // no available non-bad reserved block
                         if (reservedBlockOfLun0[dieNo] >= TOTAL_BLOCKS_PER_LUN)
                         {
                             remapFlag = 0;
@@ -174,7 +176,7 @@ void RemapBadBlock()
                         }
                     }
 
-                    // we found a block for replacing the bad block
+                    // whether we found a free block to replace the bad block
                     if (remapFlag)
                     {
                         phyBlockMapPtr->phyBlock[dieNo][blockNo].remappedPhyBlock = reservedBlockOfLun0[dieNo];
@@ -255,6 +257,10 @@ void RemapBadBlock()
 
 /**
  * @brief Reset the free block list of each die.
+ *
+ * This function currently will be called before the BBT being recovered, in other words,
+ * when the function is called, the fw don't know which block is free, which block is bad
+ * yet. The fw therefore cannot build the V2P mapping and the free block list.
  */
 void InitDieMap()
 {
@@ -271,15 +277,11 @@ void InitDieMap()
 /**
  * @brief Create V2P table and free block list.
  *
- * Map each virtual block to a correpsonding physical block:
+ * Assign a physical blocks for each virtual block:
  *
  *  - The translation rule is basically static mapping, but the target physical block may
- *    be bad block and replaced by another reserved block. Therefore, we should check the
- *    `remappedPhyBlock` to get the avaliable physical block.
- *
- *    @sa
- *      - `Vblock2PblockOfTbsTranslation` defines the V2P mapping rule.
- *      - `InitAddressMap` and `RemapBadBlock()` defines bad block remapping rule.
+ *    be bad block, and thus point to another reserved block. Therefore, we should check
+ *    the `remappedPhyBlock` to get the available physical block.
  *
  *    @note If there is no enough reserved block to remap the bad physical block, the
  *    `remappedPhyBlock` will still points to the original PBA. So we must check the bad
@@ -287,6 +289,13 @@ void InitDieMap()
  *
  *  - If the target physical block of the virtual block is non-bad block, add the virtual
  *    block into free block list; otherwise, ignore and avoid to use the virtual block.
+ *
+ * @sa
+ *  - `Vblock2PblockOfTbsTranslation` defines the V2P mapping rule.
+ *  - `InitAddressMap` and `RemapBadBlock()` defines bad block remapping rule.
+ *
+ * @todo Check used (neither free nor bad) blocks without updating the BBT.
+ *
  */
 void InitBlockMap()
 {
@@ -638,6 +647,10 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
  *
  * 4. Persist the newly created bbt to the flash
  *
+ * @warning The fw should not always use same page for storing the BBT.
+ *
+ * @todo Use bitmap and magic number to record bad blocks and identify BBT
+ *
  * @param tempBufAddr the base address for buffering the pages that contain the bbt.
  */
 void RecoverBadBlockTable(unsigned int tempBufAddr)
@@ -671,14 +684,10 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
     {
         bbtTableChecker = (unsigned char *)(tempBbtBufAddr[dieNo]);
 
-        /**
+        /*
          * Each block on this die use 1 byte to store the bad block info, but only use 1
          * bit to indicate whether that block is a bad block. So here just determine if
          * the bbt exists by checking the first byte.
-         *
-         * @todo use bitmap to record bad blocks
-         *
-         * @warning why not use magic number to make sure the data is valid ??
          */
         if ((*bbtTableChecker == BLOCK_STATE_NORMAL) || (*bbtTableChecker == BLOCK_STATE_BAD))
         {
