@@ -90,7 +90,7 @@
 - Logical Slice Map:
 - Virtual Slice Map:
 
-    ![VSA Strcture](../imgs/fw-vsa-strcture.png)
+    ![VSA Structure](./imgs/fw-vsa-strcture.png)
 
 
 ### Data Buffer

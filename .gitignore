@@ -16,3 +16,11 @@
 
 # docs:
 !README.md
+
+!Doxygen
+!.github/
+!.github/**
+!theme/
+!theme/**
+!imgs/
+!imgs/**
