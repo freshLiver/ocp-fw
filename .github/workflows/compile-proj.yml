@@ -1,0 +1,16 @@
+# Simple workflow for compiling firmware code
+name: Compile
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Compile Environment
+        run: sudo apt-get update && sudo apt-get -y install build-essential gcc-arm-none-eabi
+
+      - name: Compile
+        run: make all
