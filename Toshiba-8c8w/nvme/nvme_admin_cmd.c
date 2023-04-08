@@ -48,13 +48,52 @@
 #include "debug.h"
 #include "string.h"
 #include "io_access.h"
+#include "monitor/monitor.h"
 
 #include "nvme.h"
 #include "host_lld.h"
 #include "nvme_identify.h"
 #include "nvme_admin_cmd.h"
+#include "ftl_config.h"
+#include "address_translation.h"
 
 extern NVME_CONTEXT g_nvmeTask;
+
+void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
+{
+    uint32_t mode = nvmeAdminCmd->dword10; // dword10 is used to specify the monitor mode
+
+    uint32_t dw11 = nvmeAdminCmd->dword11;
+    uint32_t dw12 = nvmeAdminCmd->dword12;
+    uint32_t dw13 = nvmeAdminCmd->dword13;
+    uint32_t dw14 = nvmeAdminCmd->dword14;
+    uint32_t dw15 = nvmeAdminCmd->dword15;
+
+    if (nvmeAdminCmd->OPC == ADMIN_MONITOR_BUFFER)
+    {
+        uint32_t lba1 = dw11;
+        uint32_t lba2 = dw12;
+
+        switch (mode)
+        {
+        case 1:
+            monitor_dump_buffer(MONITOR_MODE_DUMP_DIRTY, 0, 0);
+            break;
+        case 2:
+            monitor_dump_buffer(MONITOR_MODE_DUMP_SPECIFY, lba1, 0);
+            break;
+        case 3:
+            monitor_dump_buffer(MONITOR_MODE_DUMP_RANGE, lba1, lba2);
+            break;
+
+        default:
+            monitor_dump_buffer(MONITOR_MODE_DUMP_FULL, 0, 0);
+            break;
+        }
+    }
+    else
+        pr_error("Monitor: Unexpected monitor opcode: %u", nvmeAdminCmd->OPC);
+}
 
 unsigned int get_num_of_queue(unsigned int dword11)
 {
@@ -426,19 +465,24 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
     needCpl         = 1;
     needSlotRelease = 0;
 
-    /*	xil_printf("OPC = 0x%X\r\n", nvmeAdminCmd->OPC);
-                    xil_printf("FUSE = 0x%X\r\n", nvmeAdminCmd->FUSE);
-                    xil_printf("PSDT = 0x%X\r\n", nvmeAdminCmd->PSDT);
-                    xil_printf("CID = 0x%X\r\n",nvmeAdminCmd->CID);
-                    xil_printf("NSID = 0x%X\r\n", nvmeAdminCmd->NSID);
-                    xil_printf("MPTR[1] = 0x%X, MPTR[0] = 0x%X\r\n", nvmeAdminCmd->MPTR[1], nvmeAdminCmd->MPTR[0]);
-                    xil_printf("PRP1[63:32] = 0x%X, PRP1[31:0] = 0x%X\r\n", nvmeAdminCmd->PRP1[1],
-       nvmeAdminCmd->PRP1[0]); xil_printf("PRP2[63:32] = 0x%X, PRP2[31:0] = 0x%X\r\n", nvmeAdminCmd->PRP2[1],
-       nvmeAdminCmd->PRP2[0]); xil_printf("dword10 = 0x%X\r\n", nvmeAdminCmd->dword10); xil_printf("dword11 =
-       0x%X\r\n", nvmeAdminCmd->dword11); xil_printf("dword12 = 0x%X\r\n", nvmeAdminCmd->dword12);
-                    xil_printf("dword13 = 0x%X\r\n", nvmeAdminCmd->dword13);
-                    xil_printf("dword14 = 0x%X\r\n", nvmeAdminCmd->dword14);
-                    xil_printf("dword15 = 0x%X\r\n", nvmeAdminCmd->dword15);*/
+#if defined(DEBUG) && (DEBUG > 2)
+    pr_debug("OPC   = 0x%X", nvmeAdminCmd->OPC);
+    pr_debug("FUSE  = 0x%X", nvmeAdminCmd->FUSE);
+    pr_debug("PSDT  = 0x%X", nvmeAdminCmd->PSDT);
+    pr_debug("CID   = 0x%X", nvmeAdminCmd->CID);
+    pr_debug("NSID  = 0x%X", nvmeAdminCmd->NSID);
+    pr_debug("MPTR[1] = 0x%X, MPTR[0] = 0x%X", nvmeAdminCmd->MPTR[1], nvmeAdminCmd->MPTR[0]);
+    pr_debug("MPTR[1] = 0x%X, MPTR[0] = 0x%X", nvmeAdminCmd->MPTR[1], nvmeAdminCmd->MPTR[0]);
+    pr_debug("PRP1[63:32] = 0x%X, PRP1[31:0] = 0x%X", nvmeAdminCmd->PRP1[1], nvmeAdminCmd->PRP1[0]);
+    pr_debug("PRP2[63:32] = 0x%X, PRP2[31:0] = 0x%X", nvmeAdminCmd->PRP2[1], nvmeAdminCmd->PRP2[0]);
+    pr_debug("DW 10 = 0x%X", nvmeAdminCmd->dword10);
+    pr_debug("DW 11 = 0x%X", nvmeAdminCmd->dword11);
+    pr_debug("DW 12 = 0x%X", nvmeAdminCmd->dword12);
+    pr_debug("DW 13 = 0x%X", nvmeAdminCmd->dword13);
+    pr_debug("DW 14 = 0x%X", nvmeAdminCmd->dword14);
+    pr_debug("DW 15 = 0x%X", nvmeAdminCmd->dword15);
+#endif /* DEBUG */
+
     switch (opc)
     {
     case ADMIN_SET_FEATURES:
@@ -499,6 +543,16 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
     }
     case ADMIN_DOORBELL_BUFFER_CONFIG:
     {
+        needCpl          = 0;
+        needSlotRelease  = 0;
+        nvmeCPL.dword[0] = 0;
+        nvmeCPL.specific = 0x0;
+        break;
+    }
+    case ADMIN_MONITOR_BUFFER:
+    {
+        handle_monitor_cmds(nvmeAdminCmd);
+
         needCpl          = 0;
         needSlotRelease  = 0;
         nvmeCPL.dword[0] = 0;

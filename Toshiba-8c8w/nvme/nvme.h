@@ -79,6 +79,10 @@
 #define ADMIN_SECURITY_SEND              0x81
 #define ADMIN_SECURITY_RECEIVE           0x82
 
+/* customized admin commands (>= 0xC0) for monitoring */
+
+#define ADMIN_MONITOR_BUFFER  0xC1
+
 /*Opcodes for IO Commands */
 #define IO_NVM_FLUSH               0x00
 #define IO_NVM_WRITE               0x01
