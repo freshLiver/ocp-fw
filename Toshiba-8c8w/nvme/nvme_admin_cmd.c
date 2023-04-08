@@ -91,6 +91,26 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
             break;
         }
     }
+    else if (nvmeAdminCmd->OPC == ADMIN_MONITOR_FLASH)
+    {
+        uint32_t iDie = dw11, iBlk = dw12, iPage = dw13;
+        uint32_t iCh = Vdie2PchTranslation(iDie), iWay = Vdie2PwayTranslation(iDie);
+
+        switch (mode)
+        {
+        case 1:
+            monitor_dump_free_blocks(iDie);
+            break;
+        case 2:
+            monitor_dump_phy_page(iCh, iWay, iBlk, iPage);
+            break;
+
+        default:
+            for (iDie = 0; iDie < USER_DIES; ++iDie)
+                monitor_dump_free_blocks(iDie);
+            break;
+        }
+    }
     else if (nvmeAdminCmd->OPC == ADMIN_MONITOR_MAPPING)
     {
         uint32_t src = dw11;
@@ -571,6 +591,7 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
         nvmeCPL.specific = 0x0;
         break;
     }
+    case ADMIN_MONITOR_FLASH:
     case ADMIN_MONITOR_BUFFER:
     case ADMIN_MONITOR_MAPPING:
     {

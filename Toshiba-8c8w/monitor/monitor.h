@@ -49,4 +49,7 @@ void monitor_dump_vsa(uint32_t vsa);
 void monitor_dump_mapping();
 void monitor_set_l2v(uint32_t lsa, uint32_t vsa);
 
+void monitor_dump_free_blocks(uint32_t iDie);
+void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage);
+
 #endif /* __OPENSSD_FW_MONITOR_H__ */
