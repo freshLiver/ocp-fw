@@ -91,6 +91,28 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
             break;
         }
     }
+    else if (nvmeAdminCmd->OPC == ADMIN_MONITOR_MAPPING)
+    {
+        uint32_t src = dw11;
+        uint32_t dst = dw12;
+
+        switch (mode)
+        {
+        case 1:
+            monitor_dump_lsa(src);
+            break;
+        case 2:
+            monitor_dump_vsa(src);
+            break;
+        case 3:
+            monitor_set_l2v(src, dst);
+            break;
+
+        default:
+            monitor_dump_mapping();
+            break;
+        }
+    }
     else
         pr_error("Monitor: Unexpected monitor opcode: %u", nvmeAdminCmd->OPC);
 }
@@ -550,6 +572,7 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
         break;
     }
     case ADMIN_MONITOR_BUFFER:
+    case ADMIN_MONITOR_MAPPING:
     {
         handle_monitor_cmds(nvmeAdminCmd);
 

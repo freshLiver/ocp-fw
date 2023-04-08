@@ -44,4 +44,9 @@ void monitor_dump_slice_buffer(uint32_t iDie);
 
 void monitor_dump_buffer(MONITOR_MODE mode, uint32_t slsa, uint32_t elsa);
 
+void monitor_dump_lsa(uint32_t lsa);
+void monitor_dump_vsa(uint32_t vsa);
+void monitor_dump_mapping();
+void monitor_set_l2v(uint32_t lsa, uint32_t vsa);
+
 #endif /* __OPENSSD_FW_MONITOR_H__ */

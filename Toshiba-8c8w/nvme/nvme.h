@@ -82,6 +82,7 @@
 /* customized admin commands (>= 0xC0) for monitoring */
 
 #define ADMIN_MONITOR_BUFFER  0xC1
+#define ADMIN_MONITOR_MAPPING 0xC3
 
 /*Opcodes for IO Commands */
 #define IO_NVM_FLUSH               0x00
