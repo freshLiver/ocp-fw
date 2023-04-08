@@ -72,6 +72,8 @@ void InitFTL()
     InitDataBuf();         //
     InitGcVictimMap();     //
 
+    monitorInit();
+
     /*
      * MB_PER_BLOCK                         == 16384 * 256 / (1024 * 1024) == 4
      * MB_PER_SSD                           == USER_BLOCKS_PER_DIE * USER_DIES * MB_PER_BLOCK == 524288

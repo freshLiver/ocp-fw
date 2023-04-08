@@ -54,6 +54,8 @@
 #include "request_transform.h"
 #include "garbage_collection.h"
 
+#include "monitor/monitor.h"
+
 #define DRAM_START_ADDR 0x00100000
 
 #define MEMORY_SEGMENTS_START_ADDR DRAM_START_ADDR
@@ -117,7 +119,17 @@
 #define FTL_MANAGEMENT_END_ADDR ((WAY_PRIORITY_TABLE_ADDR + sizeof(WAY_PRIORITY_TABLE)) - 1)
 
 #define RESERVED1_START_ADDR (FTL_MANAGEMENT_END_ADDR + 1)
-#define RESERVED1_END_ADDR   0x3FFFFFFF
+
+/* -------------------------------------------------------------------------- */
+/*                         allocate space for monitor                         */
+/* -------------------------------------------------------------------------- */
+
+#define MONITOR_START_ADDR           (RESERVED1_START_ADDR)
+#define MONITOR_DATA_BUFFER_ADDR     (MONITOR_START_ADDR)
+#define MONITOR_DATA_BUFFER_END_ADDR (MONITOR_DATA_BUFFER_ADDR + sizeof(MONITOR_DATA_BUFFER))
+#define MONITOR_END_ADDR             (MONITOR_DATA_BUFFER_END_ADDR)
+
+#define RESERVED1_END_ADDR 0x3FFFFFFF
 
 #define DRAM_END_ADDR 0x3FFFFFFF
 

@@ -211,6 +211,7 @@
 // slice size, the mapping unit of FTL, equal to page size
 #define BYTES_PER_DATA_REGION_OF_SLICE  16384
 #define BYTES_PER_SPARE_REGION_OF_SLICE 256
+#define BYTES_PER_SLICE                 (BYTES_PER_DATA_REGION_OF_SLICE + BYTES_PER_SPARE_REGION_OF_SLICE)
 
 #define SLICES_PER_PAGE                                                                                           \
     (BYTES_PER_DATA_REGION_OF_PAGE / BYTES_PER_DATA_REGION_OF_SLICE) // a slice directs a page, full page mapping
