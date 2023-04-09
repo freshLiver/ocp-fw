@@ -105,6 +105,10 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
             monitor_dump_phy_page(iCh, iWay, iBlk, iPage);
             break;
 
+        case 4:
+            monitor_erase_phy_blk(iCh, iWay, iBlk);
+            break;
+
         default:
             for (iDie = 0; iDie < USER_DIES; ++iDie)
                 monitor_dump_free_blocks(iDie);

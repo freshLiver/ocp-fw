@@ -53,3 +53,43 @@ void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t
     // dump page content
     monitor_dump_slice_buffer(iDie);
 }
+
+/**
+ * @brief Erase the specified physical block.
+ *
+ * @param iCh The channel number of the physical block to be erase.
+ * @param iWay The way number of the physical block to be erase.
+ * @param iPBlk The physical block number of the physical block to be erase.
+ */
+void monitor_erase_phy_blk(uint32_t iCh, uint32_t iWay, uint32_t iPBlk)
+{
+    uint32_t iReqEntry, iDie, iVBlk;
+
+    // try to do P2V
+    iDie  = Pcw2VdieTranslation(iCh, iWay);
+    iVBlk = monitor_p2vblk(iDie, iPBlk);
+
+    // prepare request
+    iReqEntry = GetFromFreeReqQ();
+
+    REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
+    REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_ERASE;
+    REQ_ENTRY(iReqEntry)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_PHY_ORG;
+    REQ_ENTRY(iReqEntry)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_TOTAL;
+    REQ_ENTRY(iReqEntry)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_NONE; /* no buffer needed */
+    REQ_ENTRY(iReqEntry)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_NONE;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalCh           = iCh;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalWay          = iWay;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalBlock        = iPBlk;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalPage         = 0; /* dummy */
+
+    // print request info
+    pr_info("REQ[%u]: Erase Ch[%u].Way[%u].PBlk[%u]", iReqEntry, iCh, iWay, iPBlk);
+    pr_info("\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : Vorg2VsaTranslation(iDie, iVBlk, 0));
+    pr_info("\t bad block: %u", PBLK_ENTRY(iDie, iPBlk)->bad);
+    pr_info("\t remapped to PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
+
+    // issue and wait until finished
+    SelectLowLevelReqQ(iReqEntry);
+    SyncAllLowLevelReqDone();
+}
