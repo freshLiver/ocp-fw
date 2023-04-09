@@ -29,6 +29,11 @@ void monitor_dump_phy_page_info(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uin
     pr_info("\t remapped to PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
 }
 
+/**
+ * @brief Dump all free blocks on the specified die by traversing the free block table.
+ *
+ * @param iDie The target die number.
+ */
 void monitor_dump_free_blocks(uint32_t iDie)
 {
     // each die has their own free block list
@@ -38,6 +43,17 @@ void monitor_dump_free_blocks(uint32_t iDie)
     pr("");
 }
 
+/**
+ * @brief Read the data of the specified page into the slice buffer of the same die.
+ *
+ * @note The data read from the flash memory will be buffered to the slice buffer of the
+ * same die where the data is originally stored.
+ *
+ * @param iCh The target channel number of the data to be read.
+ * @param iWay The target way number of the data to be read.
+ * @param iPBlk The target physical block number of the data to be read.
+ * @param iPage The target page number of the data to be read.
+ */
 void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
 {
     // prepare request

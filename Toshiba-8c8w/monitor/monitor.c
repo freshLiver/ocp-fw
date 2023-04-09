@@ -26,6 +26,14 @@ void monitorInit()
 
 void monitor_clear_slice_buffer(uint32_t iDie) { memset(&MONITOR_DIE_DATA_BUF(iDie).byte, 0, BYTES_PER_SLICE); }
 
+/**
+ * @brief Dump the slice buffer content of the specified die.
+ *
+ * @note Since the data will be parsed in 4-byte unit, if the data is stored in the format
+ * of Little-Endian, it will be converted to Big-Endian during the parsing process.
+ *
+ * @param iDie The target die number of the slice buffer to be dumped.
+ */
 void monitor_dump_slice_buffer(uint32_t iDie)
 {
     const uint32_t *data  = (uint32_t *)MONITOR_DIE_DATA_BUF(iDie).data;
