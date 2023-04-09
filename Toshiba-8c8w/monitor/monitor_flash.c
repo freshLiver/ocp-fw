@@ -6,6 +6,29 @@
 #include "request_allocation.h"
 #include "request_transform.h"
 
+/**
+ * @brief Dump some info about a specific physical page.
+ *
+ * @param iCh The channel number of the target page to be dumped.
+ * @param iWay The way number of the target page to be dumped.
+ * @param iPBlk The physical block number of the target page to be dumped.
+ * @param iPage The page number of the target page to be dumped.
+ */
+void monitor_dump_phy_page_info(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
+{
+    uint32_t iDie, iVBlk;
+
+    // try to do P2V
+    iDie  = Pcw2VdieTranslation(iCh, iWay);
+    iVBlk = monitor_p2vblk(iDie, iPBlk);
+
+    // print request info
+    pr_info("Ch[%u].Way[%u].PBlk[%u].Page[%u]:", iCh, iWay, iPBlk, iPage);
+    pr_info("\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : Vorg2VsaTranslation(iDie, iVBlk, iPage));
+    pr_info("\t bad block: %u", PBLK_ENTRY(iDie, iPBlk)->bad);
+    pr_info("\t remapped to PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
+}
+
 void monitor_dump_free_blocks(uint32_t iDie)
 {
     // each die has their own free block list
@@ -17,14 +40,9 @@ void monitor_dump_free_blocks(uint32_t iDie)
 
 void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
 {
-    uint32_t iReqEntry, iDie, iVBlk;
-
-    // try to do P2V
-    iDie  = Pcw2VdieTranslation(iCh, iWay);
-    iVBlk = monitor_p2vblk(iDie, iPBlk);
-
     // prepare request
-    iReqEntry = GetFromFreeReqQ();
+    uint32_t iDie      = Pcw2VdieTranslation(iCh, iWay);
+    uint32_t iReqEntry = GetFromFreeReqQ();
 
     REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
     REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_READ;
@@ -40,11 +58,8 @@ void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t
     REQ_ENTRY(iReqEntry)->nandInfo.physicalBlock        = iPBlk;
     REQ_ENTRY(iReqEntry)->nandInfo.physicalPage         = iPage;
 
-    // print request info
-    pr_info("REQ[%u]: Read Ch[%u].Way[%u].PBlk[%u].Page[%u]", iReqEntry, iCh, iWay, iPBlk, iPage);
-    pr_info("\t\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : Vorg2VsaTranslation(iDie, iVBlk, iPage));
-    pr_info("\t\t bad block: %u", PBLK_ENTRY(iDie, iPBlk)->bad);
-    pr_info("\t\t remapped block: PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
+    pr_debug("Req[%u]: READ", iReqEntry);
+    monitor_dump_phy_page_info(iCh, iWay, iPBlk, iPage);
 
     // issue and wait until finished
     SelectLowLevelReqQ(iReqEntry);
@@ -63,14 +78,8 @@ void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t
  */
 void monitor_erase_phy_blk(uint32_t iCh, uint32_t iWay, uint32_t iPBlk)
 {
-    uint32_t iReqEntry, iDie, iVBlk;
-
-    // try to do P2V
-    iDie  = Pcw2VdieTranslation(iCh, iWay);
-    iVBlk = monitor_p2vblk(iDie, iPBlk);
-
     // prepare request
-    iReqEntry = GetFromFreeReqQ();
+    uint32_t iReqEntry = GetFromFreeReqQ();
 
     REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
     REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_ERASE;
@@ -84,10 +93,8 @@ void monitor_erase_phy_blk(uint32_t iCh, uint32_t iWay, uint32_t iPBlk)
     REQ_ENTRY(iReqEntry)->nandInfo.physicalPage         = 0; /* dummy */
 
     // print request info
-    pr_info("REQ[%u]: Erase Ch[%u].Way[%u].PBlk[%u]", iReqEntry, iCh, iWay, iPBlk);
-    pr_info("\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : Vorg2VsaTranslation(iDie, iVBlk, 0));
-    pr_info("\t bad block: %u", PBLK_ENTRY(iDie, iPBlk)->bad);
-    pr_info("\t remapped to PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
+    pr_debug("Req[%u]: ERASE", iReqEntry);
+    monitor_dump_phy_page_info(iCh, iWay, iPBlk, 0);
 
     // issue and wait until finished
     SelectLowLevelReqQ(iReqEntry);

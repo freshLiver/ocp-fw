@@ -50,6 +50,7 @@ void monitor_dump_mapping();
 void monitor_set_l2v(uint32_t lsa, uint32_t vsa);
 uint32_t monitor_p2vblk(uint32_t iDie, uint32_t iPBlk);
 
+void monitor_dump_phy_page_info(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage);
 void monitor_dump_free_blocks(uint32_t iDie);
 void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage);
 void monitor_erase_phy_blk(uint32_t iCh, uint32_t iWay, uint32_t iPBlk);
