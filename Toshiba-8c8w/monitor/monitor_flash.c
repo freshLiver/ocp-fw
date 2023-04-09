@@ -70,6 +70,53 @@ void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t
 }
 
 /**
+ * @brief Write slice buffer data into the specific physical page.
+ *
+ * @note The data to be written to the target block is taken from the slice buffer of the
+ * target die, the caller should make sure the slice buffer of target die contains correct
+ * data before calling this function.
+ *
+ * @param iCh The target channel number of the data to be written to.
+ * @param iWay The target way number of the data to be written to.
+ * @param iPBlk The physical block number of the data to be written to.
+ * @param iPage The target page number of the data to be written to.
+ */
+void monitor_write_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
+{
+    uint32_t iReqEntry = GetFromFreeReqQ();
+    uint32_t iDie      = Pcw2VdieTranslation(iCh, iWay);
+
+    REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
+    REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_WRITE;
+    REQ_ENTRY(iReqEntry)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+    REQ_ENTRY(iReqEntry)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+    REQ_ENTRY(iReqEntry)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ADDR;
+    REQ_ENTRY(iReqEntry)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_PHY_ORG;
+    REQ_ENTRY(iReqEntry)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_TOTAL;
+    REQ_ENTRY(iReqEntry)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_NONE;
+    REQ_ENTRY(iReqEntry)->dataBufInfo.addr              = (uintptr_t)MONITOR_DIE_DATA_BUF(iDie).byte;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalCh           = iCh;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalWay          = iWay;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalBlock        = iPBlk;
+    REQ_ENTRY(iReqEntry)->nandInfo.physicalPage         = iPage;
+
+    // dump buffer content before issuing write request
+    monitor_dump_slice_buffer(iDie);
+
+    pr_debug("Req[%u]: WRITE", iReqEntry);
+    monitor_dump_phy_page_info(iCh, iWay, iPBlk, iPage);
+
+    // issue and wait
+    SelectLowLevelReqQ(iReqEntry);
+    SyncAllLowLevelReqDone();
+
+#if defined(DEBUG) && (DEBUG > 2)
+    // read target page after writing for debugging
+    monitor_dump_phy_page(iCh, iWay, iPBlk, iPage);
+#endif /* DEBUG */
+}
+
+/**
  * @brief Erase the specified physical block.
  *
  * @param iCh The channel number of the physical block to be erase.

@@ -53,6 +53,7 @@ uint32_t monitor_p2vblk(uint32_t iDie, uint32_t iPBlk);
 void monitor_dump_phy_page_info(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage);
 void monitor_dump_free_blocks(uint32_t iDie);
 void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage);
+void monitor_write_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage);
 void monitor_erase_phy_blk(uint32_t iCh, uint32_t iWay, uint32_t iPBlk);
 
 #endif /* __OPENSSD_FW_MONITOR_H__ */
