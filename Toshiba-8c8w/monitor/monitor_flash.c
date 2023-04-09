@@ -17,33 +17,11 @@ void monitor_dump_free_blocks(uint32_t iDie)
 
 void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
 {
-    uint32_t iReqEntry, iDie, iLun, iVBlk, off;
+    uint32_t iReqEntry, iDie, iVBlk;
 
     // try to do P2V
-    iDie = Pcw2VdieTranslation(iCh, iWay);
-    iLun = iPBlk / TOTAL_BLOCKS_PER_LUN;
-    off  = iPBlk % TOTAL_BLOCKS_PER_LUN;
-
-    if (off < USER_BLOCKS_PER_LUN)
-    {
-        iVBlk = iLun * USER_BLOCKS_PER_LUN + off;
-    }
-    else
-    {
-        /*
-         * Even if the given pblk not directly belongs to a vblk, there may be a bad pblk
-         * that was remapped to the given pblk.
-         */
-        for (off = 0; off < USER_BLOCKS_PER_LUN; ++off)
-        {
-            iVBlk = iLun * TOTAL_BLOCKS_PER_LUN + off;
-            if (PBLK_ENTRY(iDie, iVBlk)->remappedPhyBlock == iPBlk)
-                break;
-            else
-                iVBlk = BLOCK_FAIL;
-        }
-        // if vblk not found, iVBlk should be BLOCK_FAIL
-    }
+    iDie  = Pcw2VdieTranslation(iCh, iWay);
+    iVBlk = monitor_p2vblk(iDie, iPBlk);
 
     // prepare request
     iReqEntry = GetFromFreeReqQ();

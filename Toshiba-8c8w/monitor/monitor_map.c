@@ -55,3 +55,33 @@ void monitor_set_l2v(uint32_t lsa, uint32_t vsa)
     else
         pr_error("Skipped, LSA(%u) or VSA(%u) out-of-range!!!", lsa, vsa);
 }
+
+uint32_t monitor_p2vblk(uint32_t iDie, uint32_t iPBlk)
+{
+    uint32_t iVBlk, iLun, off;
+
+    iLun = iPBlk / TOTAL_BLOCKS_PER_LUN;
+    off  = iPBlk % TOTAL_BLOCKS_PER_LUN;
+
+    if (off < USER_BLOCKS_PER_LUN)
+    {
+        iVBlk = iLun * USER_BLOCKS_PER_LUN + off;
+    }
+    else
+    {
+        /*
+         * Even if the given pblk not directly belongs to a vblk, there may be a bad pblk
+         * that was remapped to the given pblk.
+         */
+        for (off = 0; off < USER_BLOCKS_PER_LUN; ++off)
+        {
+            iVBlk = iLun * TOTAL_BLOCKS_PER_LUN + off;
+            if (PBLK_ENTRY(iDie, iVBlk)->remappedPhyBlock == iPBlk)
+                break;
+            else
+                iVBlk = BLOCK_FAIL;
+        }
+        // if vblk not found, iVBlk should be BLOCK_FAIL
+    }
+    return iVBlk;
+}
