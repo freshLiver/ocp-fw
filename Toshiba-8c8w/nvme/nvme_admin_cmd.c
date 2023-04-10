@@ -63,16 +63,10 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
 {
     uint32_t mode = nvmeAdminCmd->dword10; // dword10 is used to specify the monitor mode
 
-    uint32_t dw11 = nvmeAdminCmd->dword11;
-    uint32_t dw12 = nvmeAdminCmd->dword12;
-    uint32_t dw13 = nvmeAdminCmd->dword13;
-    uint32_t dw14 = nvmeAdminCmd->dword14;
-    uint32_t dw15 = nvmeAdminCmd->dword15;
-
     if (nvmeAdminCmd->OPC == ADMIN_MONITOR_BUFFER)
     {
-        uint32_t lba1 = dw11;
-        uint32_t lba2 = dw12;
+        uint32_t lba1 = nvmeAdminCmd->dword11;
+        uint32_t lba2 = nvmeAdminCmd->dword12;
 
         switch (mode)
         {
@@ -93,9 +87,13 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
     }
     else if (nvmeAdminCmd->OPC == ADMIN_MONITOR_FLASH)
     {
-        uint32_t iDie = dw11, iBlk = dw12, iPage = dw13, len = dw14;
-        uint32_t iCh = Vdie2PchTranslation(iDie), iWay = Vdie2PwayTranslation(iDie);
+        uint32_t iDie      = nvmeAdminCmd->dword11;
+        uint32_t iBlk      = nvmeAdminCmd->dword12;
+        uint32_t iPage     = nvmeAdminCmd->dword13;
+        uint32_t len       = nvmeAdminCmd->dword14;
         uint32_t hostAddrH = nvmeAdminCmd->PRP1[1], hostAddrL = nvmeAdminCmd->PRP1[0];
+
+        uint32_t iCh = Vdie2PchTranslation(iDie), iWay = Vdie2PwayTranslation(iDie);
 
         switch (mode)
         {
@@ -122,8 +120,8 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
     }
     else if (nvmeAdminCmd->OPC == ADMIN_MONITOR_MAPPING)
     {
-        uint32_t src = dw11;
-        uint32_t dst = dw12;
+        uint32_t src = nvmeAdminCmd->dword11;
+        uint32_t dst = nvmeAdminCmd->dword12;
 
         switch (mode)
         {
