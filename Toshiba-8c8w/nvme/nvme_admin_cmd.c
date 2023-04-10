@@ -93,8 +93,9 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
     }
     else if (nvmeAdminCmd->OPC == ADMIN_MONITOR_FLASH)
     {
-        uint32_t iDie = dw11, iBlk = dw12, iPage = dw13;
+        uint32_t iDie = dw11, iBlk = dw12, iPage = dw13, len = dw14;
         uint32_t iCh = Vdie2PchTranslation(iDie), iWay = Vdie2PwayTranslation(iDie);
+        uint32_t hostAddrH = nvmeAdminCmd->PRP1[1], hostAddrL = nvmeAdminCmd->PRP1[0];
 
         switch (mode)
         {
@@ -103,6 +104,10 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
             break;
         case 2:
             monitor_dump_phy_page(iCh, iWay, iBlk, iPage);
+            break;
+        case 3:
+            monitor_nvme_write_slice_buffer(iDie, hostAddrH, hostAddrL, len);
+            monitor_write_phy_page(iCh, iWay, iBlk, iPage);
             break;
 
         case 4:

@@ -1,5 +1,6 @@
 #include "debug.h"
 #include "monitor/monitor.h"
+#include "nvme/host_lld.h"
 
 MONITOR_DATA_BUFFER *monitorBuffers;
 
@@ -81,4 +82,38 @@ void monitor_dump_slice_buffer(uint32_t iDie)
     }
 
     pr_info("\n" SPLIT_LINE);
+}
+
+/**
+ * @brief Read data from host buffer to the slice buffer of the specified die.
+ *
+ * @note Since the slice buffer size is limited, the should not
+ *
+ * @param iDie The target die number of the slice buffer to store the host data.
+ * @param hostAddrH The upper 32 bits of host PCIe buffer address.
+ * @param hostAddrL The lower 32 bits of host PCIe buffer address.
+ * @param len The length in bytes of the data to be read.
+ */
+void monitor_nvme_write_slice_buffer(uint32_t iDie, uint32_t hostAddrH, uint32_t hostAddrL, uint32_t len)
+{
+    uint32_t lenLimited;
+    uintptr_t buffer;
+
+    // limit the max data size to slice buffer size
+    buffer = (uintptr_t)MONITOR_DIE_DATA_BUF(iDie).byte;
+    if (len > BYTES_PER_SLICE)
+    {
+        pr_info("MONITOR: Limit data length %u -> BYTES_PER_SLICE", len);
+        lenLimited = BYTES_PER_SLICE;
+    }
+    else
+        lenLimited = len;
+
+    pr_info("MONITOR: NVMe DMA 0x%X%X -> Slice Buffer[%u]", hostAddrH, hostAddrL, iDie);
+    set_direct_rx_dma(buffer, hostAddrH, hostAddrL, lenLimited);
+    check_direct_rx_dma_done();
+
+#if defined(DEBUG) && (DEBUG > 2)
+    monitor_dump_slice_buffer(iDie);
+#endif /* DEBUG */
 }
