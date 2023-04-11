@@ -40,6 +40,9 @@ void monitor_dump_slice_buffer(uint32_t iDie)
     const uint32_t *data  = (uint32_t *)MONITOR_DIE_DATA_BUF(iDie).data;
     const uint32_t *spare = (uint32_t *)MONITOR_DIE_DATA_BUF(iDie).spare;
 
+    // reset buffer before reading
+    monitor_clear_slice_buffer(iDie);
+
     pr_info(SPLIT_LINE);
 
 #ifdef __ARM_BIG_ENDIAN
