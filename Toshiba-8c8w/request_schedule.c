@@ -1430,9 +1430,9 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
                 xil_printf("Erase FAIL on             ");
 
             rowAddr = GenerateNandRowAddr(reqSlotTag);
-            xil_printf("ch %x way %x rowAddr %x / completion %x statusReport %x \r\n", chNo, wayNo, rowAddr,
-                       completeFlagTablePtr->completeFlag[chNo][wayNo],
-                       statusReportTablePtr->statusReport[chNo][wayNo]);
+            pr_error("ch %x way %x rowAddr 0x%x: completeFlag 0x%x statusReport 0x%x", chNo, wayNo, rowAddr,
+                     completeFlagTablePtr->completeFlag[chNo][wayNo],
+                     statusReportTablePtr->statusReport[chNo][wayNo]);
 
             if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc == REQ_OPT_NAND_ECC_OFF)
                 if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
