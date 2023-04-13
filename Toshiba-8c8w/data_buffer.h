@@ -48,6 +48,7 @@
 
 #include "stdint.h"
 #include "ftl_config.h"
+#include "memory_map.h"
 
 // the data buffer entries for each die, default 16
 #define AVAILABLE_DATA_BUFFER_ENTRY_COUNT           (16 * USER_DIES)
@@ -209,5 +210,8 @@ extern P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 #define H_BUF_ENTRY(iEntry)      (&dataBufHashTablePtr->dataBufHash[(iEntry)])
 #define H_BUF_HEAD_ENTRY(iEntry) (BUF_ENTRY(H_BUF_ENTRY((iEntry))->headEntry))
 #define H_BUF_HEAD_IDX(iEntry)   (H_BUF_ENTRY((iEntry))->headEntry)
+
+#define BUF_DATA_ENTRY2ADDR(iEntry)  (DATA_BUFFER_BASE_ADDR + ((iEntry)*BYTES_PER_DATA_REGION_OF_SLICE))
+#define BUF_SPARE_ENTRY2ADDR(iEntry) (SPARE_DATA_BUFFER_BASE_ADDR + ((iEntry)*BYTES_PER_SPARE_REGION_OF_SLICE))
 
 #endif /* DATA_BUFFER_H_ */
