@@ -34,6 +34,8 @@ typedef struct
 extern MONITOR_DATA_BUFFER *monitorBuffers;
 #define MONITOR_DIE_DATA_BUF(iDie) (monitorBuffers->dieBuf[(iDie)])
 
+#define DUMP_WORDS_PER_ROW 8
+
 /* -------------------------------------------------------------------------- */
 /*                              public interfaces                             */
 /* -------------------------------------------------------------------------- */
@@ -44,6 +46,7 @@ void monitor_dump_slice_buffer(uint32_t iDie);
 void monitor_nvme_write_slice_buffer(uint32_t iDie, uint32_t hostAddrH, uint32_t hostAddrL, uint32_t len);
 
 void monitor_dump_data_buffer_info(MONITOR_MODE mode, uint32_t slsa, uint32_t elsa);
+void monitor_dump_data_buffer_content(uint32_t iBufEntry);
 
 void monitor_dump_lsa(uint32_t lsa);
 void monitor_dump_vsa(uint32_t vsa);

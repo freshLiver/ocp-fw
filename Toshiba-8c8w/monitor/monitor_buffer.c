@@ -49,3 +49,52 @@ void monitor_dump_data_buffer_info(MONITOR_MODE mode, uint32_t slsa, uint32_t el
         pr_info("   .blockingReqTail    = %u", entry->blockingReqTail);
     }
 }
+
+void monitor_dump_data_buffer_content(uint32_t iBufEntry)
+{
+    const uint32_t *data  = (uint32_t *)BUF_DATA_ENTRY2ADDR(iBufEntry);
+    const uint32_t *spare = (uint32_t *)BUF_SPARE_ENTRY2ADDR(iBufEntry);
+
+    pr_info(SPLIT_LINE);
+
+#ifdef __ARM_BIG_ENDIAN
+    pr_debug("Big-Endian Mode");
+#else
+    pr_debug("Little-Endian Mode");
+#endif /* __ARM_BIG_ENDIAN */
+
+    pr_info("Data Buffer[%u] (at 0x%p) Data:", iBufEntry, data);
+    for (uint32_t iWord = 0; iWord < (BYTES_PER_DATA_REGION_OF_SLICE >> 2); iWord += DUMP_WORDS_PER_ROW)
+    {
+        pr_raw("Byte %08u:\t", iWord << 2);
+        for (uint32_t off = 0; off < DUMP_WORDS_PER_ROW; ++off)
+        {
+#ifdef __ARM_BIG_ENDIAN
+            pr_raw("%08x ", data[iWord + off]);
+#else
+            pr_raw("%08x ", __builtin_bswap32(data[iWord + off]));
+#endif /* __ARM_BIG_ENDIAN */
+        }
+        pr("");
+    }
+
+    pr_info(SPLIT_LINE);
+
+    pr_info("Data Buffer[%u] (at 0x%p) Spare:", iBufEntry, spare);
+
+    for (uint32_t iWord = 0; iWord < (BYTES_PER_SPARE_REGION_OF_SLICE >> 2); iWord += DUMP_WORDS_PER_ROW)
+    {
+        pr_raw("Byte %08u:\t", iWord << 2);
+        for (uint32_t off = 0; off < DUMP_WORDS_PER_ROW; ++off)
+        {
+#ifdef __ARM_BIG_ENDIAN
+            pr_raw("%08x ", spare[iWord + off]);
+#else
+            pr_raw("%08x ", __builtin_bswap32(spare[iWord + off]));
+#endif /* __ARM_BIG_ENDIAN */
+        }
+        pr("");
+    }
+
+    pr_info("\n" SPLIT_LINE);
+}
