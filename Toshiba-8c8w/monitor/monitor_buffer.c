@@ -4,7 +4,7 @@
 #include "data_buffer.h"
 #include "request_format.h"
 
-void monitor_dump_buffer(MONITOR_MODE mode, uint32_t slsa, uint32_t elsa)
+void monitor_dump_data_buffer_info(MONITOR_MODE mode, uint32_t slsa, uint32_t elsa)
 {
     P_DATA_BUF_ENTRY entry;
 

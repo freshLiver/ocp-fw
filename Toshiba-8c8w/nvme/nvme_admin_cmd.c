@@ -71,17 +71,17 @@ void handle_monitor_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
         switch (mode)
         {
         case 1:
-            monitor_dump_buffer(MONITOR_MODE_DUMP_DIRTY, 0, 0);
+            monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_DIRTY, 0, 0);
             break;
         case 2:
-            monitor_dump_buffer(MONITOR_MODE_DUMP_SPECIFY, lba1, 0);
+            monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_SPECIFY, lba1, 0);
             break;
         case 3:
-            monitor_dump_buffer(MONITOR_MODE_DUMP_RANGE, lba1, lba2);
+            monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_RANGE, lba1, lba2);
             break;
 
         default:
-            monitor_dump_buffer(MONITOR_MODE_DUMP_FULL, 0, 0);
+            monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_FULL, 0, 0);
             break;
         }
     }
