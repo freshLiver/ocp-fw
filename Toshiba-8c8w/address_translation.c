@@ -843,7 +843,7 @@ void InitBlockDieMap()
     // create V2P table and initialize free block list
     InitBlockMap();
 
-    if (eraseFlag)
+    if (eraseFlag && 0)
         EraseUserBlockSpace();
 
     InitCurrentBlockOfDieMap();
