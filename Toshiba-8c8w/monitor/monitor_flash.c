@@ -7,29 +7,6 @@
 #include "request_transform.h"
 
 /**
- * @brief Dump some info about a specific physical page.
- *
- * @param iCh The channel number of the target page to be dumped.
- * @param iWay The way number of the target page to be dumped.
- * @param iPBlk The physical block number of the target page to be dumped.
- * @param iPage The page number of the target page to be dumped.
- */
-void monitor_dump_phy_page_info(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
-{
-    uint32_t iDie, iVBlk;
-
-    // try to do P2V
-    iDie  = Pcw2VdieTranslation(iCh, iWay);
-    iVBlk = monitor_p2vblk(iDie, iPBlk);
-
-    // print request info
-    pr_info("Ch[%u].Way[%u].PBlk[%u].Page[%u]:", iCh, iWay, iPBlk, iPage);
-    pr_info("\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : Vorg2VsaTranslation(iDie, iVBlk, iPage));
-    pr_info("\t bad block: %u", PBLK_ENTRY(iDie, iPBlk)->bad);
-    pr_info("\t remapped to PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
-}
-
-/**
  * @brief Dump all free blocks on the specified die by traversing the free block table.
  *
  * @param iDie The target die number.
