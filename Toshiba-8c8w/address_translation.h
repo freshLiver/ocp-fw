@@ -369,11 +369,20 @@ extern unsigned int mbPerbadBlockSpace;
 #define VBLK_NEXT_ENTRY(iDie, iBlk) (VBLK_ENTRY((iDie), VBLK_NEXT_IDX((iDie), (iBlk))))
 #define PBLK_ENTRY(iDie, iBlk)      (&phyBlockMapPtr->phyBlock[(iDie)][(iBlk)])
 
-#define LSA_ENTRY(lsa)   (&logicalSliceMapPtr->logicalSlice[(lsa)])
-#define VSA_ENTRY(vsa)   (&virtualSliceMapPtr->virtualSlice[(vsa)])
-#define LSA2VSA(lsa)     (LSA_ENTRY((lsa))->virtualSliceAddr)
-#define VSA2LSA(vsa)     (VSA_ENTRY((vsa))->logicalSliceAddr)
-#define VBA2PBA_MBS(vba) (Vblock2PblockOfMbsTranslation((vba)))
-#define VBA2PBA_TBS(vba) (Vblock2PblockOfTbsTranslation((vba)))
+#define LSA_ENTRY(lsa) (&logicalSliceMapPtr->logicalSlice[(lsa)])
+#define VSA_ENTRY(vsa) (&virtualSliceMapPtr->virtualSlice[(vsa)])
+#define LSA2VSA(lsa)   (LSA_ENTRY((lsa))->virtualSliceAddr)
+#define VSA2LSA(vsa)   (VSA_ENTRY((vsa))->logicalSliceAddr)
+
+#define VDIE2PCH(iDie)              (Vdie2PchTranslation((iDie)))
+#define VDIE2PWAY(iDie)             (Vdie2PwayTranslation((iDie)))
+#define VSA2VDIE(vsa)               (Vsa2VdieTranslation((vsa)))
+#define VSA2VBLK(vsa)               (Vsa2VblockTranslation((vsa)))
+#define VSA2VPAGE(vsa)              (Vsa2VpageTranslation((vsa)))
+#define VBA2PBA_MBS(vba)            (Vblock2PblockOfMbsTranslation((vba)))
+#define VBA2PBA_TBS(vba)            (Vblock2PblockOfTbsTranslation((vba)))
+#define VORG2VSA(iDie, iBlk, iPage) (Vorg2VsaTranslation((iDie), (iBlk), (iPage)))
+
+#define PCH2VDIE(iCh, iWay) (Pcw2VdieTranslation((iCh), (iWay)))
 
 #endif /* ADDRESS_TRANSLATION_H_ */
