@@ -65,7 +65,7 @@
 #include "xscugic_hw.h"
 #include "xscugic.h"
 #include "xil_printf.h"
-#include "nvme/debug.h"
+#include "debug.h"
 
 #include "nvme/nvme.h"
 #include "nvme/nvme_main.h"

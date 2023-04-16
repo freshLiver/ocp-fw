@@ -5,7 +5,7 @@ DST         := OpenSSD
 CC              = arm-none-eabi-gcc
 
 C_DEFS          = DEBUG HOST_DEBUG
-C_MODS          = . nvme monitor nmc
+C_MODS          = . nvme
 C_DIRS          = bsp $(addprefix $(FW_VERSION)/, $(C_MODS))
 C_LIBS          =
 
