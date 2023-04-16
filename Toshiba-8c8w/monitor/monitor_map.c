@@ -23,7 +23,13 @@ void monitor_dump_vsa(uint32_t vsa)
         iWay  = Vdie2PwayTranslation(iDie);
         iBlk  = VBA2PBA_MBS(Vsa2VblockTranslation(vsa));
         iPage = Vsa2VpageTranslation(vsa);
-        pr_info("VSA[%u] = Ch %u Way %u Blk %u Page %u", vsa, iCh, iWay, iBlk, iPage);
+
+        pr_info("VSA[%u] = Ch %u Way %u PBlk %u Page %u", vsa, iCh, iWay, iBlk, iPage);
+        if (PBLK_ENTRY(iDie, iBlk)->bad)
+        {
+            pr_info("\t PBlk[%u] marked as bad", iBlk);
+            pr_info("\t\t remapped to: PBlk[%u]", PBLK_ENTRY(iDie, iBlk)->remappedPhyBlock);
+        }
     }
     else
         pr_error("Skipped, VSA(%u) out-of-range!!!", vsa);
@@ -69,11 +75,15 @@ void monitor_dump_mapping()
 
 void monitor_set_l2v(uint32_t lsa, uint32_t vsa)
 {
+    uint32_t iDie  = Vsa2VdieTranslation(vsa);
+    uint32_t iBlk  = Vsa2VblockTranslation(vsa);
+    uint32_t iPage = Vsa2VpageTranslation(vsa);
+
     if (lsa < SLICES_PER_SSD && vsa < SLICES_PER_SSD)
     {
         LSA_ENTRY(lsa)->virtualSliceAddr = vsa;
         VSA_ENTRY(vsa)->logicalSliceAddr = lsa;
-        pr_info("Update V2P Mapping : LSA[%u] -> VSA[%u]", lsa, vsa);
+        pr_info("MONITOR: Updated LSA[%u] -> VSA[%u] (Die[%u].Blk[%u].Page[%u])", lsa, vsa, iDie, iBlk, iPage);
     }
     else
         pr_error("Skipped, LSA(%u) or VSA(%u) out-of-range!!!", lsa, vsa);

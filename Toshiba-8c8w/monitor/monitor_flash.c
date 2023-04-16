@@ -51,7 +51,7 @@ void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t
     REQ_ENTRY(iReqEntry)->nandInfo.physicalBlock        = iPBlk;
     REQ_ENTRY(iReqEntry)->nandInfo.physicalPage         = iPage;
 
-    pr_debug("Req[%u]: READ", iReqEntry);
+    pr_debug("Req[%u]: MONITOR READ (buffer 0x%x)", iReqEntry, REQ_ENTRY(iReqEntry)->dataBufInfo.addr);
     monitor_dump_phy_page_info(iCh, iWay, iPBlk, iPage);
 
     // clear buffer before reading

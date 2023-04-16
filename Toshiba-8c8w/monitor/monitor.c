@@ -46,7 +46,7 @@ void monitor_dump_slice_buffer(uint32_t iDie)
     pr_debug("Little-Endian Mode");
 #endif /* __ARM_BIG_ENDIAN */
 
-    pr_info("Slice Buffer[%u] Data:", iDie);
+    pr_info("Slice Buffer[%u] Data (at 0x%p):", iDie, data);
     for (uint32_t iWord = 0; iWord < (BYTES_PER_DATA_REGION_OF_SLICE >> 2); iWord += DUMP_WORDS_PER_ROW)
     {
         pr_raw("Byte %08u:\t", iWord << 2);
@@ -63,7 +63,7 @@ void monitor_dump_slice_buffer(uint32_t iDie)
 
     pr_info(SPLIT_LINE);
 
-    pr_info("Slice Buffer[%u] Spare:", iDie);
+    pr_info("Slice Buffer[%u] Spare (at 0x%p):", iDie, spare);
 
     for (uint32_t iWord = 0; iWord < (BYTES_PER_SPARE_REGION_OF_SLICE >> 2); iWord += DUMP_WORDS_PER_ROW)
     {
