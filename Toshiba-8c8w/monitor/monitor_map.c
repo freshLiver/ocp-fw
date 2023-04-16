@@ -18,11 +18,11 @@ void monitor_dump_vsa(uint32_t vsa)
 
     if (vsa < SLICES_PER_SSD)
     {
-        iDie  = Vsa2VdieTranslation(vsa);
-        iCh   = Vdie2PchTranslation(iDie);
-        iWay  = Vdie2PwayTranslation(iDie);
-        iBlk  = VBA2PBA_MBS(Vsa2VblockTranslation(vsa));
-        iPage = Vsa2VpageTranslation(vsa);
+        iDie  = VSA2VDIE(vsa);
+        iCh   = VDIE2PCH(iDie);
+        iWay  = VDIE2PWAY(iDie);
+        iBlk  = VBA2PBA_MBS(VSA2VBLK(vsa));
+        iPage = VSA2VPAGE(vsa);
 
         pr_info("VSA[%u] = Ch %u Way %u PBlk %u Page %u", vsa, iCh, iWay, iBlk, iPage);
         if (PBLK_ENTRY(iDie, iBlk)->bad)
@@ -48,12 +48,12 @@ void monitor_dump_phy_page_info(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uin
     uint32_t iDie, iVBlk;
 
     // try to do P2V
-    iDie  = Pcw2VdieTranslation(iCh, iWay);
+    iDie  = PCH2VDIE(iCh, iWay);
     iVBlk = monitor_p2vblk(iDie, iPBlk);
 
     // print request info
     pr_info("Ch[%u].Way[%u].PBlk[%u].Page[%u]:", iCh, iWay, iPBlk, iPage);
-    pr_info("\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : Vorg2VsaTranslation(iDie, iVBlk, iPage));
+    pr_info("\t VSA: %u", (iVBlk == BLOCK_FAIL) ? VSA_FAIL : VORG2VSA(iDie, iVBlk, iPage));
     pr_info("\t bad block: %u", PBLK_ENTRY(iDie, iPBlk)->bad);
     pr_info("\t remapped to PhyBlock[%u]", PBLK_ENTRY(iDie, iPBlk)->remappedPhyBlock);
 }
@@ -75,9 +75,9 @@ void monitor_dump_mapping()
 
 void monitor_set_l2v(uint32_t lsa, uint32_t vsa)
 {
-    uint32_t iDie  = Vsa2VdieTranslation(vsa);
-    uint32_t iBlk  = Vsa2VblockTranslation(vsa);
-    uint32_t iPage = Vsa2VpageTranslation(vsa);
+    uint32_t iDie  = VSA2VDIE(vsa);
+    uint32_t iBlk  = VSA2VBLK(vsa);
+    uint32_t iPage = VSA2VPAGE(vsa);
 
     if (lsa < SLICES_PER_SSD && vsa < SLICES_PER_SSD)
     {

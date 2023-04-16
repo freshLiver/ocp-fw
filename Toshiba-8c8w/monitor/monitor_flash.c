@@ -34,7 +34,7 @@ void monitor_dump_free_blocks(uint32_t iDie)
 void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
 {
     // prepare request
-    uint32_t iDie      = Pcw2VdieTranslation(iCh, iWay);
+    uint32_t iDie      = PCH2VDIE(iCh, iWay);
     uint32_t iReqEntry = GetFromFreeReqQ();
 
     REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
@@ -80,7 +80,7 @@ void monitor_dump_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t
 void monitor_write_phy_page(uint32_t iCh, uint32_t iWay, uint32_t iPBlk, uint32_t iPage)
 {
     uint32_t iReqEntry = GetFromFreeReqQ();
-    uint32_t iDie      = Pcw2VdieTranslation(iCh, iWay);
+    uint32_t iDie      = PCH2VDIE(iCh, iWay);
 
     REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
     REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_WRITE;

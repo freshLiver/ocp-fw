@@ -36,7 +36,7 @@ void monitor_handle_admin_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
         uint32_t len       = nvmeAdminCmd->dword14;
         uint32_t hostAddrH = nvmeAdminCmd->PRP1[1], hostAddrL = nvmeAdminCmd->PRP1[0];
 
-        uint32_t iCh = Vdie2PchTranslation(iDie), iWay = Vdie2PwayTranslation(iDie);
+        uint32_t iCh = VDIE2PCH(iDie), iWay = VDIE2PWAY(iDie);
 
         switch (mode)
         {
