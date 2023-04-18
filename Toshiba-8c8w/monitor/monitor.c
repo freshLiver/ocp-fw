@@ -23,7 +23,11 @@ void monitorInit()
         pr_debug("Die[%u]: Allocate data buffer at 0x%p", iDie, MONITOR_DIE_DATA_BUF(iDie).byte);
 }
 
-void monitor_clear_slice_buffer(uint32_t iDie) { memset(MONITOR_DIE_DATA_BUF(iDie).byte, 0, BYTES_PER_SLICE); }
+void monitor_clear_slice_buffer(uint32_t iDie)
+{
+    pr_debug("Slice Buffer[%u]: Set all bytes 0", iDie);
+    memset(MONITOR_DIE_DATA_BUF(iDie).byte, 0, BYTES_PER_SLICE);
+}
 
 /**
  * @brief Dump the slice buffer content of the specified die.
