@@ -117,7 +117,17 @@ extern unsigned int blockedReqCnt;
  */
 #define REQ_ENTRY(iEntry) (&reqPoolPtr->reqPool[(iEntry)])
 #define REQ_BUF(iEntry)   (REQ_ENTRY((iEntry))->dataBufInfo.entry)
+#define REQ_LSA(iEntry)   (REQ_ENTRY((iEntry))->logicalSliceAddr)
 #define REQ_VSA(iEntry)   (REQ_ENTRY((iEntry))->nandInfo.virtualSliceAddr)
+
+/**
+ * @brief Check the request code of the given request pool entry index
+ *
+ * @param idx the request pool entry index of the request to be checked
+ * @param code the supposed request code of this request
+ * @return bool true if `reqType` == `type`, otherwise false
+ */
+#define REQ_CODE_IS(idx, code) (REQ_ENTRY((idx))->reqCode == (code))
 
 /**
  * @brief Check the request type of the given request pool entry index
@@ -126,15 +136,15 @@ extern unsigned int blockedReqCnt;
  * @param type the supposed type of this request
  * @return bool true if `reqType` == `type`, otherwise false
  */
-#define CHECK_REQ_TYPE(idx, type) (REQ_ENTRY(idx).reqType == (type))
+#define REQ_TYPE_IS(idx, type) (REQ_ENTRY((idx))->reqType == (type))
 
 /**
  * @brief Check the request queue type of the given request pool entry index
  *
  * @param idx the request pool entry index of the request to be checked
- * @param type the supposed queue type of this request
+ * @param qType the supposed queue type of this request
  * @return bool true if `reqType` == `type`, otherwise false
  */
-#define CHECK_REQ_QUEUE_TYPE(idx, qType) (REQ_ENTRY(idx).reqQueueType == (qType))
+#define REQ_QUEUE_TYPE_IS(idx, qType) (REQ_ENTRY((idx))->reqQueueType == (qType))
 
 #endif /* REQUEST_ALLOCATION_H_ */
