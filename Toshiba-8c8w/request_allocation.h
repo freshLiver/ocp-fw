@@ -108,6 +108,7 @@ extern unsigned int blockedReqCnt;
 /* -------------------------------------------------------------------------- */
 /*                  util macros for request pool related ops                  */
 /* -------------------------------------------------------------------------- */
+
 /**
  * @brief Get the request entry by entry index.
  *
