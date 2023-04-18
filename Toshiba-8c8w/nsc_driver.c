@@ -51,6 +51,8 @@
 #include "xparameters.h"
 #include <assert.h>
 
+#include "debug.h"
+
 typedef struct
 {
     unsigned char delayVal[32];
@@ -150,6 +152,7 @@ V2FSetFeaturesT(T4REGS *t4regs, int way, unsigned int address, volatile unsigned
 
 void V2FGetReadyBusy(T4REGS *t4regs, unsigned int *report)
 {
+    pr_debug("ChReg 0x%p", t4regs);
     T4REG_CMD_GET_READYBUSY getReadyBusyCmd;
 
     getReadyBusyCmd.cmdSelect     = T4NSC_CMD_GET_READYBUSY;
@@ -213,6 +216,7 @@ V2FSetFeaturesSync(T4REGS *t4regs, int way, unsigned int feature0x02, unsigned i
 
 void __attribute__((optimize("O0"))) V2FReadPageTriggerAsync(T4REGS *t4regs, int way, unsigned int rowAddress)
 {
+    pr_debug("ChReg 0x%p Way %u Row %u", t4regs, way, rowAddress);
     T4REG_CMD_READ_PAGE_TRIGGER readPageTrigggerCmd;
 
     readPageTrigggerCmd.cmdSelect  = T4NSC_CMD_READ_PAGE_TRIGGER_PSLC;
@@ -229,6 +233,8 @@ void __attribute__((optimize("O0")))
 V2FReadPageTransferAsync(T4REGS *t4regs, int way, void *pageDataBuffer, void *spareDataBuffer,
                          unsigned int *errorInformation, unsigned int *completion, unsigned int rowAddress)
 {
+    pr_debug("ChReg 0x%p Way %u Row %u | 0x%p 0x%p", t4regs, way, rowAddress, pageDataBuffer, spareDataBuffer);
+
     T4REG_CMD_READ_PAGE_TRANSFER_PSLC readpagepSLC;
 
     readpagepSLC.cmdSelect               = T4NSC_CMD_READ_TRANSFER_PSLC;
@@ -249,6 +255,7 @@ V2FReadPageTransferAsync(T4REGS *t4regs, int way, void *pageDataBuffer, void *sp
 void __attribute__((optimize("O0")))
 V2FReadPageTransferRawAsync(T4REGS *t4regs, int way, void *pageDataBuffer, unsigned int *completion)
 {
+    pr_debug("ChReg 0x%p Way %u", t4regs, way);
     T4REG_CMD_READ_PAGE_TRANSFER_RAW readPageTransferRaw;
 
     readPageTransferRaw.cmdSelect               = T4NSC_CMD_READ_TRANSFER_RAW;
@@ -268,6 +275,7 @@ V2FReadPageTransferRawAsync(T4REGS *t4regs, int way, void *pageDataBuffer, unsig
 void __attribute__((optimize("O0")))
 V2FProgramPageAsync(T4REGS *t4regs, int way, unsigned int rowAddress, void *pageDataBuffer, void *spareDataBuffer)
 {
+    pr_info("ChReg 0x%p Way %u Row %u", t4regs, way, rowAddress);
     T4REG_CMD_PROGRAM_PAGE_TRANSFER_PSLC progPagepSLC;
 
     progPagepSLC.cmdSelect        = T4NSC_CMD_PROGRAM_PAGE_PSLC;
@@ -284,6 +292,7 @@ V2FProgramPageAsync(T4REGS *t4regs, int way, unsigned int rowAddress, void *page
 
 void __attribute__((optimize("O0"))) V2FEraseBlockAsync(T4REGS *t4regs, int way, unsigned int rowAddress)
 {
+    pr_error("ChReg 0x%p Way %u Row %u", t4regs, way, rowAddress);
     T4REG_CMD_ERASE_BLOCK eraseBlockCmd;
 
     assert((rowAddress & 0xFF) == 0);
@@ -300,6 +309,7 @@ void __attribute__((optimize("O0"))) V2FEraseBlockAsync(T4REGS *t4regs, int way,
 
 void __attribute__((optimize("O0"))) V2FStatusCheckAsync(T4REGS *t4regs, int way, unsigned int *statusReport)
 {
+    pr_debug("ChReg 0x%p Way %u", t4regs, way);
     T4REG_CMD_READ_STATUS readStatusCmd;
 
     readStatusCmd.cmdSelect     = T4NSC_CMD_READ_STATUS;
