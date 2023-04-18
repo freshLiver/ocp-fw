@@ -8,6 +8,7 @@ void monitor_handle_admin_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
 
     if (nvmeAdminCmd->OPC == ADMIN_MONITOR_BUFFER)
     {
+        uint32_t iDie = nvmeAdminCmd->dword11;
         uint32_t lba1 = nvmeAdminCmd->dword11;
         uint32_t lba2 = nvmeAdminCmd->dword12;
 
@@ -22,7 +23,12 @@ void monitor_handle_admin_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
         case 3:
             monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_RANGE, lba1, lba2);
             break;
-
+        case 4:
+            monitor_dump_slice_buffer(iDie);
+            break;
+        case 5:
+            monitor_clear_slice_buffer(iDie);
+            break;
         default:
             monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_FULL, 0, 0);
             break;
