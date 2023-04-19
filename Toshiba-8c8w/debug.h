@@ -92,12 +92,14 @@
 #define MEMBER_SIZE(type, mem) (sizeof((((type *)0)->mem)))
 
 #define ASSERT(cond, ...)                                                                                         \
-    if (!(cond))                                                                                                  \
-    {                                                                                                             \
-        pr_error("assert failed: " __VA_ARGS__);                                                                  \
-        while (1)                                                                                                 \
-            ;                                                                                                     \
-    }
+    ({                                                                                                            \
+        if (!(cond))                                                                                              \
+        {                                                                                                         \
+            pr_error("assert failed: " __VA_ARGS__);                                                              \
+            while (1)                                                                                             \
+                ;                                                                                                 \
+        }                                                                                                         \
+    })
 
 // raise compiler error when (cond == 0), must place in a function
 #define STATIC_ASSERT(cond) ((int)(sizeof(struct { int : (-!(cond)); })))
