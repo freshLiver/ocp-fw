@@ -52,10 +52,12 @@
 #include "xil_printf.h"
 #include "debug.h"
 #include "io_access.h"
+#include "monitor/monitor.h"
 
 #include "nvme.h"
 #include "host_lld.h"
 #include "nvme_io_cmd.h"
+#include "data_buffer.h"
 
 #include "../ftl_config.h"
 #include "../request_transform.h"
@@ -130,7 +132,17 @@ void handle_nvme_io_write(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
     ASSERT((nvmeIOCmd->PRP1[0] & 0xF) == 0 && (nvmeIOCmd->PRP2[0] & 0xF) == 0);
     ASSERT(nvmeIOCmd->PRP1[1] < 0x10000 && nvmeIOCmd->PRP2[1] < 0x10000);
 
-    ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_WRITE);
+    switch (nvmeIOCmd->OPC)
+    {
+    case IO_NVM_WRITE_PHY:
+    case IO_NVM_WRITE:
+        ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, nvmeIOCmd->OPC);
+        break;
+
+    default:
+        pr_error("Unexpected NVMe opcode: %u", nvmeIOCmd->OPC);
+        break;
+    }
 }
 
 void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
@@ -152,7 +164,11 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
     {
     case IO_NVM_FLUSH:
     {
-        xil_printf("IO Flush Command\r\n");
+        monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_DIRTY, 0, 0);
+        pr_debug("IO Flush Command");
+        FlushDataBuf(nvmeCmd->cmdSlotTag);
+        monitor_dump_data_buffer_info(MONITOR_MODE_DUMP_DIRTY, 0, 0);
+
         nvmeCPL.dword[0] = 0;
         nvmeCPL.specific = 0x0;
         set_auto_nvme_cpl(nvmeCmd->cmdSlotTag, nvmeCPL.specific, nvmeCPL.statusFieldWord);
@@ -161,14 +177,14 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
     case IO_NVM_WRITE:
     case IO_NVM_WRITE_PHY:
     {
-        // xil_printf("IO Write Command\r\n");
+        pr_debug("IO Write Command");
         handle_nvme_io_write(nvmeCmd->cmdSlotTag, nvmeIOCmd);
         break;
     }
     case IO_NVM_READ:
     case IO_NVM_READ_PHY:
     {
-        // xil_printf("IO Read Command\r\n");
+        pr_debug("IO Read Command");
         handle_nvme_io_read(nvmeCmd->cmdSlotTag, nvmeIOCmd);
         break;
     }

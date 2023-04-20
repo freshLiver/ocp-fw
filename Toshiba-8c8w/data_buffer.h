@@ -184,6 +184,7 @@ typedef struct _TEMPORARY_DATA_BUF_MAP
 } TEMPORARY_DATA_BUF_MAP, *P_TEMPORARY_DATA_BUF_MAP;
 
 void InitDataBuf();
+void FlushDataBuf(uint32_t cmdSlotTag);
 unsigned int CheckDataBufHit(unsigned int reqSlotTag);
 unsigned int AllocateDataBuf();
 void UpdateDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int reqSlotTag);

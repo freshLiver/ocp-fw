@@ -116,6 +116,77 @@ void InitDataBuf()
         tempDataBufMapPtr->tempDataBuf[bufEntry].blockingReqTail = REQ_SLOT_TAG_NONE;
 }
 
+void FlushDataBuf(uint32_t cmdSlotTag)
+{
+    uint32_t iCh, iWay, iDie, iPBlk, iPage, iBufEntry, iReqEntry, vsa;
+    P_DATA_BUF_ENTRY bufEntry;
+
+    // traverse data buf LRU list from LRU entry to MRU entry
+    for (iBufEntry = BUF_TAIL_IDX(); iBufEntry != DATA_BUF_NONE; iBufEntry = BUF_PREV_IDX(iBufEntry))
+    {
+        // get corresponding buffer entry
+        bufEntry = BUF_ENTRY(iBufEntry);
+
+        // flush buffer entry
+        if (bufEntry->dirty == DATA_BUF_DIRTY)
+        {
+            if (bufEntry->phyReq)
+            {
+                // FIXME: we should program a page once before that page being erased
+                vsa   = bufEntry->logicalSliceAddr;
+                iDie  = VSA2VDIE(vsa);
+                iCh   = VDIE2PCH(iDie);
+                iWay  = VDIE2PWAY(iDie);
+                iPBlk = VSA2VBLK(vsa);
+                iPage = VSA2VPAGE(vsa);
+
+                iReqEntry = GetFromFreeReqQ();
+
+                REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
+                REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_WRITE;
+                REQ_ENTRY(iReqEntry)->nvmeCmdSlotTag                = cmdSlotTag;
+                REQ_ENTRY(iReqEntry)->logicalSliceAddr              = bufEntry->logicalSliceAddr;
+                REQ_ENTRY(iReqEntry)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
+                REQ_ENTRY(iReqEntry)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_PHY_ORG;
+                REQ_ENTRY(iReqEntry)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+                REQ_ENTRY(iReqEntry)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+                REQ_ENTRY(iReqEntry)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_NONE;
+                REQ_ENTRY(iReqEntry)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_TOTAL;
+                REQ_ENTRY(iReqEntry)->dataBufInfo.entry             = iBufEntry;
+                REQ_ENTRY(iReqEntry)->nandInfo.physicalCh           = iCh;
+                REQ_ENTRY(iReqEntry)->nandInfo.physicalWay          = iWay;
+                REQ_ENTRY(iReqEntry)->nandInfo.physicalBlock        = iPBlk;
+                REQ_ENTRY(iReqEntry)->nandInfo.physicalPage         = iPage;
+
+                pr_info("Req[%u]: Write C/W[%u/%u].PBlk[%u].Page[%u]", iReqEntry, iCh, iWay, iPBlk, iPage);
+            }
+            else
+            {
+                iReqEntry = GetFromFreeReqQ();
+                vsa       = AddrTransWrite(bufEntry->logicalSliceAddr);
+
+                REQ_ENTRY(iReqEntry)->reqType                       = REQ_TYPE_NAND;
+                REQ_ENTRY(iReqEntry)->reqCode                       = REQ_CODE_WRITE;
+                REQ_ENTRY(iReqEntry)->nvmeCmdSlotTag                = cmdSlotTag;
+                REQ_ENTRY(iReqEntry)->logicalSliceAddr              = bufEntry->logicalSliceAddr;
+                REQ_ENTRY(iReqEntry)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
+                REQ_ENTRY(iReqEntry)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_VSA;
+                REQ_ENTRY(iReqEntry)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+                REQ_ENTRY(iReqEntry)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+                REQ_ENTRY(iReqEntry)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
+                REQ_ENTRY(iReqEntry)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_MAIN;
+                REQ_ENTRY(iReqEntry)->dataBufInfo.entry             = iBufEntry;
+                REQ_ENTRY(iReqEntry)->nandInfo.virtualSliceAddr     = vsa;
+            }
+
+            UpdateDataBufEntryInfoBlockingReq(iBufEntry, iReqEntry);
+            SelectLowLevelReqQ(iReqEntry);
+
+            bufEntry->dirty = DATA_BUF_CLEAN;
+        }
+    }
+}
+
 /**
  * @brief Get the data buffer entry index of the given request.
  *
