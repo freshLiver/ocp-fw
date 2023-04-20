@@ -59,6 +59,9 @@
 #define DATA_BUF_DIRTY 1 // the buffer entry is not clean
 #define DATA_BUF_CLEAN 0 // the buffer entry is not dirty
 
+#define DATA_BUF_FOR_PHY_REQ 1 // the data buffer entry is used for physical addr (OC) request
+#define DATA_BUF_FOR_LOG_REQ 0 // the data buffer entry is used for logical addr request
+
 #define FindDataBufHashTableEntry(logicalSliceAddr) ((logicalSliceAddr) % AVAILABLE_DATA_BUFFER_ENTRY_COUNT)
 
 /**
@@ -108,7 +111,8 @@ typedef struct _DATA_BUF_ENTRY
     unsigned int hashPrevEntry : 16;   // the index of the prev data buffer entry in the bucket
     unsigned int hashNextEntry : 16;   // the index of the next data buffer entry in the bucket
     unsigned int dirty : 1;            // whether this data buffer entry is dirty or not (clean)
-    unsigned int reserved0 : 15;
+    unsigned int phyReq : 1;           // treat LSA as physical address
+    unsigned int reserved0 : 14;
 } DATA_BUF_ENTRY, *P_DATA_BUF_ENTRY;
 
 /**

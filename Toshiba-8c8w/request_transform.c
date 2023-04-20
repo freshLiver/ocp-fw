@@ -48,6 +48,8 @@
 
 #include "xil_printf.h"
 #include <assert.h>
+#include "debug.h"
+
 #include "nvme/nvme.h"
 #include "nvme/host_lld.h"
 #include "memory_map.h"
@@ -132,12 +134,24 @@ void ReqTransNvmeToSlice(unsigned int cmdSlotTag, unsigned int startLba, unsigne
     loop               = ((startLba % NVME_BLOCKS_PER_SLICE) + requestedNvmeBlock) / NVME_BLOCKS_PER_SLICE;
 
     // translate the opcode for NVMe command into that for slice requests.
-    if (cmdCode == IO_NVM_WRITE)
+    switch (cmdCode)
+    {
+    case IO_NVM_WRITE:
         reqCode = REQ_CODE_WRITE;
-    else if (cmdCode == IO_NVM_READ)
+        break;
+    case IO_NVM_WRITE_PHY:
+        reqCode = REQ_CODE_OCSSD_PHY_WRITE;
+        break;
+    case IO_NVM_READ:
         reqCode = REQ_CODE_READ;
-    else
-        assert(!"[WARNING] Not supported command code [WARNING]");
+        break;
+    case IO_NVM_READ_PHY:
+        reqCode = REQ_CODE_OCSSD_PHY_READ;
+        break;
+    default:
+        ASSERT(0, "Unsupported cmdCode: %u!", cmdCode);
+        break;
+    }
 
     // first transform
     nvmeBlockOffset = (startLba % NVME_BLOCKS_PER_SLICE);
@@ -219,29 +233,37 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
 {
     unsigned int reqSlotTag, virtualSliceAddr, dataBufEntry;
 
-    dataBufEntry = reqPoolPtr->reqPool[originReqSlotTag].dataBufInfo.entry;
-    if (dataBufMapPtr->dataBuf[dataBufEntry].dirty == DATA_BUF_DIRTY)
+    dataBufEntry = REQ_ENTRY(originReqSlotTag)->dataBufInfo.entry;
+
+    if (BUF_ENTRY(dataBufEntry)->dirty == DATA_BUF_DIRTY)
     {
-        reqSlotTag       = GetFromFreeReqQ();
-        virtualSliceAddr = AddrTransWrite(dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr);
+        if (BUF_ENTRY(dataBufEntry)->phyReq)
+        {
+            ASSERT(0, "Writing phy page is not supported yet");
+        }
+        else
+        {
+            reqSlotTag       = GetFromFreeReqQ();
+            virtualSliceAddr = AddrTransWrite(BUF_LSA(dataBufEntry));
 
-        reqPoolPtr->reqPool[reqSlotTag].reqType          = REQ_TYPE_NAND;
-        reqPoolPtr->reqPool[reqSlotTag].reqCode          = REQ_CODE_WRITE;
-        reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag   = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
-        reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_VSA;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_MAIN;
-        reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry             = dataBufEntry;
-        UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
-        reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
+            REQ_ENTRY(reqSlotTag)->reqType                       = REQ_TYPE_NAND;
+            REQ_ENTRY(reqSlotTag)->reqCode                       = REQ_CODE_WRITE;
+            REQ_ENTRY(reqSlotTag)->nvmeCmdSlotTag                = REQ_ENTRY(originReqSlotTag)->nvmeCmdSlotTag;
+            REQ_ENTRY(reqSlotTag)->logicalSliceAddr              = BUF_LSA(dataBufEntry);
+            REQ_ENTRY(reqSlotTag)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
+            REQ_ENTRY(reqSlotTag)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_VSA;
+            REQ_ENTRY(reqSlotTag)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+            REQ_ENTRY(reqSlotTag)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+            REQ_ENTRY(reqSlotTag)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
+            REQ_ENTRY(reqSlotTag)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_MAIN;
+            REQ_ENTRY(reqSlotTag)->dataBufInfo.entry             = dataBufEntry;
+            REQ_ENTRY(reqSlotTag)->nandInfo.virtualSliceAddr     = virtualSliceAddr;
 
-        SelectLowLevelReqQ(reqSlotTag);
+            UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+            SelectLowLevelReqQ(reqSlotTag);
 
-        dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_CLEAN;
+            BUF_ENTRY(dataBufEntry)->dirty = DATA_BUF_CLEAN;
+        }
     }
 }
 
@@ -261,40 +283,82 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
  */
 void DataReadFromNand(unsigned int originReqSlotTag)
 {
-    unsigned int reqSlotTag, virtualSliceAddr;
+    uint32_t reqSlotTag;
 
-    virtualSliceAddr = AddrTransRead(reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr);
-
-    /*
-     * Since `ReqTransNvmeToSlice()` only set a part of options for `ReqTransNvmeToSlice`,
-     * we need to set more detailed configs before issuing NAND requests.
-     */
-    if (virtualSliceAddr != VSA_FAIL)
+    if (REQ_CODE_IS(originReqSlotTag, REQ_CODE_READ))
     {
+        uint32_t vsa = AddrTransRead(REQ_LSA(originReqSlotTag));
+
+        if (vsa == VSA_FAIL)
+        {
+            /*
+             * When the device is detected by the host, host will try to read some pages,
+             * but the target pages may not have been programmed yet.
+             *
+             * To handle this and similar situations, the fw should just skip to read the
+             * target page and return garbage data, instead of stucking here.
+             */
+            pr_error("Req[%u]: No mapping info for LSA[%u]!", originReqSlotTag, REQ_LSA(originReqSlotTag));
+            return;
+        }
+
         /*
          * the request entry created by caller is only used for NVMe Tx/Rx, new request
          * entry is needed for flash read request.
          */
         reqSlotTag = GetFromFreeReqQ();
 
-        reqPoolPtr->reqPool[reqSlotTag].reqType          = REQ_TYPE_NAND;
-        reqPoolPtr->reqPool[reqSlotTag].reqCode          = REQ_CODE_READ;
-        reqPoolPtr->reqPool[reqSlotTag].nvmeCmdSlotTag   = reqPoolPtr->reqPool[originReqSlotTag].nvmeCmdSlotTag;
-        reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr = reqPoolPtr->reqPool[originReqSlotTag].logicalSliceAddr;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_VSA;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_MAIN;
+        REQ_ENTRY(reqSlotTag)->reqType                       = REQ_TYPE_NAND;
+        REQ_ENTRY(reqSlotTag)->reqCode                       = REQ_CODE_READ;
+        REQ_ENTRY(reqSlotTag)->nvmeCmdSlotTag                = REQ_ENTRY(originReqSlotTag)->nvmeCmdSlotTag;
+        REQ_ENTRY(reqSlotTag)->logicalSliceAddr              = REQ_LSA(originReqSlotTag);
+        REQ_ENTRY(reqSlotTag)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
+        REQ_ENTRY(reqSlotTag)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_VSA;
+        REQ_ENTRY(reqSlotTag)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+        REQ_ENTRY(reqSlotTag)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+        REQ_ENTRY(reqSlotTag)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_CHECK;
+        REQ_ENTRY(reqSlotTag)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_MAIN;
+        REQ_ENTRY(reqSlotTag)->dataBufInfo.entry             = REQ_ENTRY(originReqSlotTag)->dataBufInfo.entry;
+        REQ_ENTRY(reqSlotTag)->nandInfo.virtualSliceAddr     = vsa;
 
-        reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry =
-            reqPoolPtr->reqPool[originReqSlotTag].dataBufInfo.entry;
-        UpdateDataBufEntryInfoBlockingReq(reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry, reqSlotTag);
-        reqPoolPtr->reqPool[reqSlotTag].nandInfo.virtualSliceAddr = virtualSliceAddr;
-
+        // dispatch request
+        UpdateDataBufEntryInfoBlockingReq(REQ_ENTRY(reqSlotTag)->dataBufInfo.entry, reqSlotTag);
         SelectLowLevelReqQ(reqSlotTag);
     }
+    else if (REQ_CODE_IS(originReqSlotTag, REQ_CODE_OCSSD_PHY_READ))
+    {
+        // for a phy read request, just use the lsa as vsa
+        uint32_t iCh   = VDIE2PCH(VSA2VDIE(REQ_LSA(originReqSlotTag)));
+        uint32_t iWay  = VDIE2PWAY(VSA2VDIE(REQ_LSA(originReqSlotTag)));
+        uint32_t iPBlk = VSA2VBLK(REQ_LSA(originReqSlotTag));
+        uint32_t iPage = VSA2VPAGE(REQ_LSA(originReqSlotTag));
+
+        reqSlotTag = GetFromFreeReqQ();
+
+        REQ_ENTRY(reqSlotTag)->reqType                       = REQ_TYPE_NAND;
+        REQ_ENTRY(reqSlotTag)->reqCode                       = REQ_CODE_READ;
+        REQ_ENTRY(reqSlotTag)->nvmeCmdSlotTag                = REQ_ENTRY(originReqSlotTag)->nvmeCmdSlotTag;
+        REQ_ENTRY(reqSlotTag)->logicalSliceAddr              = REQ_LSA(originReqSlotTag);
+        REQ_ENTRY(reqSlotTag)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
+        REQ_ENTRY(reqSlotTag)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_PHY_ORG;
+        REQ_ENTRY(reqSlotTag)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+        REQ_ENTRY(reqSlotTag)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+        REQ_ENTRY(reqSlotTag)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_NONE;
+        REQ_ENTRY(reqSlotTag)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_TOTAL;
+        REQ_ENTRY(reqSlotTag)->dataBufInfo.entry             = REQ_ENTRY(originReqSlotTag)->dataBufInfo.entry;
+        REQ_ENTRY(reqSlotTag)->nandInfo.physicalCh           = iCh;
+        REQ_ENTRY(reqSlotTag)->nandInfo.physicalWay          = iWay;
+        REQ_ENTRY(reqSlotTag)->nandInfo.physicalBlock        = iPBlk;
+        REQ_ENTRY(reqSlotTag)->nandInfo.physicalPage         = iPage;
+
+        pr_info("Req[%u]: Read Ch[%u].Way[%u].PBlk[%u].Page[%u]", reqSlotTag, iCh, iWay, iPBlk, iPage);
+
+        // dispatch request
+        UpdateDataBufEntryInfoBlockingReq(REQ_ENTRY(reqSlotTag)->dataBufInfo.entry, reqSlotTag);
+        SelectLowLevelReqQ(reqSlotTag);
+    }
+    else
+        ASSERT(0, "Req[%u]: Unexpected reqCode: %u", originReqSlotTag, REQ_ENTRY(originReqSlotTag)->reqCode);
 }
 
 /**
@@ -344,18 +408,17 @@ void ReqTransSliceToLowLevel()
         if (dataBufEntry != DATA_BUF_FAIL)
         {
             // data buffer hit
-            reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+            REQ_ENTRY(reqSlotTag)->dataBufInfo.entry = dataBufEntry;
         }
         else
         {
             // data buffer miss, allocate a new buffer entry
-            dataBufEntry                                      = AllocateDataBuf();
-            reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.entry = dataBufEntry;
+            dataBufEntry                             = AllocateDataBuf();
+            REQ_ENTRY(reqSlotTag)->dataBufInfo.entry = dataBufEntry;
 
             // initialize the newly allocated data buffer entry for this request
             EvictDataBufEntry(reqSlotTag);
-            dataBufMapPtr->dataBuf[dataBufEntry].logicalSliceAddr =
-                reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
+            BUF_ENTRY(dataBufEntry)->logicalSliceAddr = REQ_LSA(reqSlotTag);
             PutToDataBufHashList(dataBufEntry);
 
             /*
@@ -363,28 +426,58 @@ void ReqTransSliceToLowLevel()
              * received from the host. So before transfering the data to host, we need to
              * call the function `DataReadFromNand()` to read the desired data to buffer.
              */
-            if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
+            switch (REQ_ENTRY(reqSlotTag)->reqCode)
+            {
+            case REQ_CODE_OCSSD_PHY_READ:
+            case REQ_CODE_READ:
                 DataReadFromNand(reqSlotTag);
-            else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE)
+                break;
+
+            case REQ_CODE_WRITE:
                 // in case of not overwriting a whole page, read current page content for migration
-                if (reqPoolPtr->reqPool[reqSlotTag].nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE)
+                if (REQ_ENTRY(reqSlotTag)->nvmeDmaInfo.numOfNvmeBlock != NVME_BLOCKS_PER_SLICE)
                     // for read modify write
                     DataReadFromNand(reqSlotTag);
+                break;
+
+            default:
+                break;
+            }
         }
 
         // generate NVMe request by replacing the slice request entry directly
-        if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE)
+        switch (REQ_ENTRY(reqSlotTag)->reqCode)
         {
-            dataBufMapPtr->dataBuf[dataBufEntry].dirty = DATA_BUF_DIRTY;
-            reqPoolPtr->reqPool[reqSlotTag].reqCode    = REQ_CODE_RxDMA;
-        }
-        else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
-            reqPoolPtr->reqPool[reqSlotTag].reqCode = REQ_CODE_TxDMA;
-        else
-            assert(!"[WARNING] Not supported reqCode. [WARNING]");
 
-        reqPoolPtr->reqPool[reqSlotTag].reqType              = REQ_TYPE_NVME_DMA;
-        reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
+        // read data from host before writing target page
+        case REQ_CODE_OCSSD_PHY_WRITE:
+        case REQ_CODE_WRITE:
+            if (REQ_CODE_IS(reqSlotTag, REQ_CODE_OCSSD_PHY_WRITE))
+                BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_PHY_REQ;
+            else
+                BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_LOG_REQ;
+
+            BUF_ENTRY(dataBufEntry)->dirty = DATA_BUF_DIRTY;
+            REQ_ENTRY(reqSlotTag)->reqCode = REQ_CODE_RxDMA;
+            break;
+
+        // send data to host after target page being read
+        case REQ_CODE_OCSSD_PHY_READ:
+        case REQ_CODE_READ:
+            if (REQ_CODE_IS(reqSlotTag, REQ_CODE_OCSSD_PHY_READ))
+                BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_PHY_REQ;
+            else
+                BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_LOG_REQ;
+            REQ_ENTRY(reqSlotTag)->reqCode = REQ_CODE_TxDMA;
+            break;
+
+        default:
+            ASSERT(0, "Unsupported reqCode: %u", REQ_ENTRY(reqSlotTag)->reqCode);
+            break;
+        }
+
+        REQ_ENTRY(reqSlotTag)->reqType              = REQ_TYPE_NVME_DMA;
+        REQ_ENTRY(reqSlotTag)->reqOpt.dataBufFormat = REQ_OPT_DATA_BUF_ENTRY;
 
         UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
         SelectLowLevelReqQ(reqSlotTag);

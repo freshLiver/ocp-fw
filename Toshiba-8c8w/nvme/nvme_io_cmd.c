@@ -90,7 +90,17 @@ void handle_nvme_io_read(unsigned int cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
     ASSERT((nvmeIOCmd->PRP1[0] & 0x3) == 0 && (nvmeIOCmd->PRP2[0] & 0x3) == 0); // error
     ASSERT(nvmeIOCmd->PRP1[1] < 0x10000 && nvmeIOCmd->PRP2[1] < 0x10000);
 
-    ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, IO_NVM_READ);
+    switch (nvmeIOCmd->OPC)
+    {
+    case IO_NVM_READ_PHY:
+    case IO_NVM_READ:
+        ReqTransNvmeToSlice(cmdSlotTag, startLba[0], nlb, nvmeIOCmd->OPC);
+        break;
+
+    default:
+        pr_error("Unexpected NVMe opcode: %u", nvmeIOCmd->OPC);
+        break;
+    }
 }
 
 /**
@@ -149,12 +159,14 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
         break;
     }
     case IO_NVM_WRITE:
+    case IO_NVM_WRITE_PHY:
     {
         // xil_printf("IO Write Command\r\n");
         handle_nvme_io_write(nvmeCmd->cmdSlotTag, nvmeIOCmd);
         break;
     }
     case IO_NVM_READ:
+    case IO_NVM_READ_PHY:
     {
         // xil_printf("IO Read Command\r\n");
         handle_nvme_io_read(nvmeCmd->cmdSlotTag, nvmeIOCmd);

@@ -45,6 +45,8 @@
 
 #include "xil_printf.h"
 #include <assert.h>
+#include "debug.h"
+
 #include "memory_map.h"
 
 P_DATA_BUF_MAP dataBufMapPtr;
@@ -96,6 +98,7 @@ void InitDataBuf()
         dataBufMapPtr->dataBuf[bufEntry].prevEntry        = bufEntry - 1;
         dataBufMapPtr->dataBuf[bufEntry].nextEntry        = bufEntry + 1;
         dataBufMapPtr->dataBuf[bufEntry].dirty            = DATA_BUF_CLEAN;
+        dataBufMapPtr->dataBuf[bufEntry].phyReq           = DATA_BUF_FOR_LOG_REQ;
         dataBufMapPtr->dataBuf[bufEntry].blockingReqTail  = REQ_SLOT_TAG_NONE;
 
         dataBufHashTablePtr->dataBufHash[bufEntry].headEntry = DATA_BUF_NONE;
@@ -129,37 +132,38 @@ unsigned int CheckDataBufHit(unsigned int reqSlotTag)
     unsigned int bufEntry, logicalSliceAddr;
 
     // get the bucket index of the given request
-    logicalSliceAddr = reqPoolPtr->reqPool[reqSlotTag].logicalSliceAddr;
-    bufEntry         = dataBufHashTablePtr->dataBufHash[FindDataBufHashTableEntry(logicalSliceAddr)].headEntry;
+    logicalSliceAddr = REQ_LSA(reqSlotTag);
+    bufEntry         = H_BUF_HEAD_IDX(FindDataBufHashTableEntry(logicalSliceAddr));
+
+    // don't take phy addr buf for logical addr, and vice versa
+    bool isPhyReq =
+        REQ_CODE_IS(reqSlotTag, REQ_CODE_OCSSD_PHY_WRITE) || REQ_CODE_IS(reqSlotTag, REQ_CODE_OCSSD_PHY_READ);
 
     // traverse the bucket and try to find the data buffer entry of target request
     while (bufEntry != DATA_BUF_NONE)
     {
-        if (dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr == logicalSliceAddr)
+        if ((BUF_LSA(bufEntry) == logicalSliceAddr) && (BUF_ENTRY(bufEntry)->phyReq == isPhyReq))
         {
+            pr_info("%s Req[%u]: Hit Buf[%u]!", isPhyReq ? "Phy" : "Log", reqSlotTag, bufEntry);
+
             // remove from the LRU list before making it MRU
-            if ((dataBufMapPtr->dataBuf[bufEntry].nextEntry != DATA_BUF_NONE) &&
-                (dataBufMapPtr->dataBuf[bufEntry].prevEntry != DATA_BUF_NONE))
+            if ((!BUF_ENTRY_IS_HEAD(bufEntry)) && (!BUF_ENTRY_IS_TAIL(bufEntry)))
             {
                 // body of LRU list
-                dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].prevEntry].nextEntry =
-                    dataBufMapPtr->dataBuf[bufEntry].nextEntry;
-                dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].nextEntry].prevEntry =
-                    dataBufMapPtr->dataBuf[bufEntry].prevEntry;
+                BUF_PREV_ENTRY(bufEntry)->nextEntry = BUF_NEXT_IDX(bufEntry);
+                BUF_NEXT_ENTRY(bufEntry)->prevEntry = BUF_PREV_IDX(bufEntry);
             }
-            else if ((dataBufMapPtr->dataBuf[bufEntry].nextEntry == DATA_BUF_NONE) &&
-                     (dataBufMapPtr->dataBuf[bufEntry].prevEntry != DATA_BUF_NONE))
+            else if ((!BUF_ENTRY_IS_HEAD(bufEntry)) && BUF_ENTRY_IS_TAIL(bufEntry))
             {
                 // tail of LRU list, modify the LRU tail
-                dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].prevEntry].nextEntry = DATA_BUF_NONE;
-                dataBufLruList.tailEntry = dataBufMapPtr->dataBuf[bufEntry].prevEntry;
+                BUF_PREV_ENTRY(bufEntry)->nextEntry = DATA_BUF_NONE;
+                dataBufLruList.tailEntry            = BUF_PREV_IDX(bufEntry);
             }
-            else if ((dataBufMapPtr->dataBuf[bufEntry].nextEntry != DATA_BUF_NONE) &&
-                     (dataBufMapPtr->dataBuf[bufEntry].prevEntry == DATA_BUF_NONE))
+            else if (BUF_ENTRY_IS_HEAD(bufEntry) && (!BUF_ENTRY_IS_TAIL(bufEntry)))
             {
                 // head of LRU list, modify the LRU head
-                dataBufMapPtr->dataBuf[dataBufMapPtr->dataBuf[bufEntry].nextEntry].prevEntry = DATA_BUF_NONE;
-                dataBufLruList.headEntry = dataBufMapPtr->dataBuf[bufEntry].nextEntry;
+                BUF_NEXT_ENTRY(bufEntry)->prevEntry = DATA_BUF_NONE;
+                dataBufLruList.headEntry            = BUF_NEXT_IDX(bufEntry);
             }
             else
             {
@@ -169,25 +173,26 @@ unsigned int CheckDataBufHit(unsigned int reqSlotTag)
             }
 
             // make this entry the MRU entry (move to the head of LRU list)
-            if (dataBufLruList.headEntry != DATA_BUF_NONE)
+            if (BUF_HEAD_IDX() != DATA_BUF_NONE)
             {
-                dataBufMapPtr->dataBuf[bufEntry].prevEntry                 = DATA_BUF_NONE;
-                dataBufMapPtr->dataBuf[bufEntry].nextEntry                 = dataBufLruList.headEntry;
-                dataBufMapPtr->dataBuf[dataBufLruList.headEntry].prevEntry = bufEntry;
-                dataBufLruList.headEntry                                   = bufEntry;
+                BUF_ENTRY(bufEntry)->prevEntry = DATA_BUF_NONE;
+                BUF_ENTRY(bufEntry)->nextEntry = BUF_HEAD_IDX();
+                BUF_HEAD_ENTRY()->prevEntry    = bufEntry;
+                dataBufLruList.headEntry       = bufEntry;
             }
             else
             {
-                dataBufMapPtr->dataBuf[bufEntry].prevEntry = DATA_BUF_NONE;
-                dataBufMapPtr->dataBuf[bufEntry].nextEntry = DATA_BUF_NONE;
-                dataBufLruList.headEntry                   = bufEntry;
-                dataBufLruList.tailEntry                   = bufEntry;
+                BUF_ENTRY(bufEntry)->prevEntry = DATA_BUF_NONE;
+                BUF_ENTRY(bufEntry)->nextEntry = DATA_BUF_NONE;
+                dataBufLruList.headEntry       = bufEntry;
+                dataBufLruList.tailEntry       = bufEntry;
             }
 
             return bufEntry;
         }
-        else
-            bufEntry = dataBufMapPtr->dataBuf[bufEntry].hashNextEntry;
+
+        // move to next entry in the same hash bucket
+        bufEntry = BUF_ENTRY(bufEntry)->hashNextEntry;
     }
 
     return DATA_BUF_FAIL;

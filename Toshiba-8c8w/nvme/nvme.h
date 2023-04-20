@@ -93,6 +93,11 @@
 #define IO_NVM_COMPARE             0x05 /* Not acceptable yet */
 #define IO_NVM_DATASET_MANAGEMENT  0x09 /* Not acceptable yet */
 
+/* customized io commands (>= 0x90) for monitoring */
+
+#define IO_NVM_WRITE_PHY 0x91
+#define IO_NVM_READ_PHY  0x92
+
 /*Status Code Type */
 #define SCT_GENERIC_COMMAND_STATUS          0
 #define SCT_COMMAND_SPECIFIC_STATUS         1
