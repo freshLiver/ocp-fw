@@ -239,7 +239,35 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
     {
         if (BUF_ENTRY(dataBufEntry)->phyReq)
         {
-            ASSERT(0, "Writing phy page is not supported yet");
+            // FIXME: we should program a page once before that page being erased
+            uint32_t iCh, iWay, iDie, iPBlk, iPage;
+
+            virtualSliceAddr = BUF_LSA(dataBufEntry);
+            iDie             = VSA2VDIE(virtualSliceAddr);
+            iCh              = VDIE2PCH(iDie);
+            iWay             = VDIE2PWAY(iDie);
+            iPBlk            = VSA2VBLK(virtualSliceAddr);
+            iPage            = VSA2VPAGE(virtualSliceAddr);
+
+            reqSlotTag = GetFromFreeReqQ();
+
+            REQ_ENTRY(reqSlotTag)->reqType                       = REQ_TYPE_NAND;
+            REQ_ENTRY(reqSlotTag)->reqCode                       = REQ_CODE_WRITE;
+            REQ_ENTRY(reqSlotTag)->nvmeCmdSlotTag                = REQ_ENTRY(originReqSlotTag)->nvmeCmdSlotTag;
+            REQ_ENTRY(reqSlotTag)->logicalSliceAddr              = BUF_LSA(dataBufEntry);
+            REQ_ENTRY(reqSlotTag)->reqOpt.dataBufFormat          = REQ_OPT_DATA_BUF_ENTRY;
+            REQ_ENTRY(reqSlotTag)->reqOpt.nandAddr               = REQ_OPT_NAND_ADDR_PHY_ORG;
+            REQ_ENTRY(reqSlotTag)->reqOpt.nandEcc                = REQ_OPT_NAND_ECC_ON;
+            REQ_ENTRY(reqSlotTag)->reqOpt.nandEccWarning         = REQ_OPT_NAND_ECC_WARNING_ON;
+            REQ_ENTRY(reqSlotTag)->reqOpt.rowAddrDependencyCheck = REQ_OPT_ROW_ADDR_DEPENDENCY_NONE;
+            REQ_ENTRY(reqSlotTag)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_TOTAL;
+            REQ_ENTRY(reqSlotTag)->dataBufInfo.entry             = dataBufEntry;
+            REQ_ENTRY(reqSlotTag)->nandInfo.physicalCh           = iCh;
+            REQ_ENTRY(reqSlotTag)->nandInfo.physicalWay          = iWay;
+            REQ_ENTRY(reqSlotTag)->nandInfo.physicalBlock        = iPBlk;
+            REQ_ENTRY(reqSlotTag)->nandInfo.physicalPage         = iPage;
+
+            pr_info("Req[%u]: Write Ch[%u].Way[%u].PBlk[%u].Page[%u]", reqSlotTag, iCh, iWay, iPBlk, iPage);
         }
         else
         {
@@ -258,12 +286,12 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
             REQ_ENTRY(reqSlotTag)->reqOpt.blockSpace             = REQ_OPT_BLOCK_SPACE_MAIN;
             REQ_ENTRY(reqSlotTag)->dataBufInfo.entry             = dataBufEntry;
             REQ_ENTRY(reqSlotTag)->nandInfo.virtualSliceAddr     = virtualSliceAddr;
-
-            UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
-            SelectLowLevelReqQ(reqSlotTag);
-
-            BUF_ENTRY(dataBufEntry)->dirty = DATA_BUF_CLEAN;
         }
+
+        UpdateDataBufEntryInfoBlockingReq(dataBufEntry, reqSlotTag);
+        SelectLowLevelReqQ(reqSlotTag);
+
+        BUF_ENTRY(dataBufEntry)->dirty = DATA_BUF_CLEAN;
     }
 }
 
