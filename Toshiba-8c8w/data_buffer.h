@@ -200,16 +200,23 @@ extern P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
 /* -------------------------------------------------------------------------- */
 
 #define BUF_ENTRY(iEntry)      (&dataBufMapPtr->dataBuf[(iEntry)])
-#define BUF_HEAD_ENTRY()       (BUF_ENTRY(dataBufLruList.headEntry))
-#define BUF_NEXT_ENTRY(iEntry) (BUF_ENTRY(BUF_ENTRY((iEntry))->nextEntry))
 #define BUF_HEAD_IDX()         (dataBufLruList.headEntry)
 #define BUF_TAIL_IDX()         (dataBufLruList.tailEntry)
+#define BUF_HEAD_ENTRY()       (BUF_ENTRY(BUF_HEAD_IDX()))
+#define BUF_TAIL_ENTRY()       (BUF_ENTRY(BUF_TAIL_IDX()))
 #define BUF_PREV_IDX(iEntry)   (BUF_ENTRY((iEntry))->prevEntry)
 #define BUF_NEXT_IDX(iEntry)   (BUF_ENTRY((iEntry))->nextEntry)
+#define BUF_PREV_ENTRY(iEntry) (BUF_ENTRY(BUF_PREV_IDX((iEntry))))
+#define BUF_NEXT_ENTRY(iEntry) (BUF_ENTRY(BUF_NEXT_IDX((iEntry))))
+
+#define BUF_ENTRY_IS_HEAD(iEntry) (BUF_PREV_IDX((iEntry)) == DATA_BUF_NONE)
+#define BUF_ENTRY_IS_TAIL(iEntry) (BUF_NEXT_IDX((iEntry)) == DATA_BUF_NONE)
 
 #define H_BUF_ENTRY(iEntry)      (&dataBufHashTablePtr->dataBufHash[(iEntry)])
 #define H_BUF_HEAD_ENTRY(iEntry) (BUF_ENTRY(H_BUF_ENTRY((iEntry))->headEntry))
 #define H_BUF_HEAD_IDX(iEntry)   (H_BUF_ENTRY((iEntry))->headEntry)
+
+#define BUF_LSA(iEntry) (BUF_ENTRY((iEntry))->logicalSliceAddr)
 
 #define BUF_DATA_ENTRY2ADDR(iEntry)  (DATA_BUFFER_BASE_ADDR + ((iEntry)*BYTES_PER_DATA_REGION_OF_SLICE))
 #define BUF_SPARE_ENTRY2ADDR(iEntry) (SPARE_DATA_BUFFER_BASE_ADDR + ((iEntry)*BYTES_PER_SPARE_REGION_OF_SLICE))

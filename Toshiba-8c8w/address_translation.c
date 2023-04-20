@@ -433,7 +433,7 @@ void ReadBadBlockTable(unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEnt
 void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsigned int tempBbtBufEntrySize,
                   unsigned int tempReadBufAddr[], unsigned int tempReadBufEntrySize)
 {
-    unsigned int phyBlockNo, dieNo, reqSlotTag;
+    unsigned int phyBlockNo, chNo, wayNo, dieNo, reqSlotTag;
     unsigned char blockChecker[USER_DIES];
     unsigned char *markPointer0;
     unsigned char *markPointer1;
@@ -476,6 +476,10 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
 
         // Read the last page of the specified block of each die if needed
         for (dieNo = 0; dieNo < USER_DIES; dieNo++)
+        {
+            chNo  = Vdie2PchTranslation(dieNo);
+            wayNo = Vdie2PwayTranslation(dieNo);
+
             if (!dieState[dieNo])
             {
                 markPointer0 = (unsigned char *)(tempReadBufAddr[dieNo] + BAD_BLOCK_MARK_BYTE0);
@@ -497,8 +501,8 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
 
                     reqPoolPtr->reqPool[reqSlotTag].dataBufInfo.addr = tempReadBufAddr[dieNo];
 
-                    reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalCh    = Vdie2PchTranslation(dieNo);
-                    reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalWay   = Vdie2PwayTranslation(dieNo);
+                    reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalCh    = chNo;
+                    reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalWay   = wayNo;
                     reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalBlock = phyBlockNo;
                     reqPoolPtr->reqPool[reqSlotTag].nandInfo.physicalPage  = BAD_BLOCK_MARK_PAGE1;
 
@@ -506,17 +510,21 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
                 }
                 else
                 {
-                    xil_printf("	bad block is detected: Ch %d Way %d phyBlock %d \r\n",
-                               Vdie2PchTranslation(dieNo), Vdie2PwayTranslation(dieNo), phyBlockNo);
+                    pr_info("C/W[%u/%u]: bad block at PBlk %u (0x%x)", chNo, wayNo, phyBlockNo, phyBlockNo);
 
                     blockChecker[dieNo] = BLOCK_STATE_BAD;
                 }
             }
+        }
 
         SyncAllLowLevelReqDone();
 
         // determine whether these blocks are bad blocks and update the bbt
         for (dieNo = 0; dieNo < USER_DIES; dieNo++)
+        {
+            chNo  = Vdie2PchTranslation(dieNo);
+            wayNo = Vdie2PwayTranslation(dieNo);
+
             if (!dieState[dieNo])
             {
                 markPointer0 = (unsigned char *)(tempReadBufAddr[dieNo] + BAD_BLOCK_MARK_BYTE0);
@@ -525,9 +533,8 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
                 if (!((*markPointer0 == CLEAN_DATA_IN_BYTE) && (*markPointer1 == CLEAN_DATA_IN_BYTE)))
                     if (blockChecker[dieNo] == BLOCK_STATE_NORMAL)
                     {
-                        xil_printf("	bad block is detected: Ch %d Way %d phyBlock %d \r\n",
-                                   Vdie2PchTranslation(dieNo), Vdie2PwayTranslation(dieNo), phyBlockNo);
 
+                        pr_info("C/W[%u/%u]: bad block at PBlk %u (0x%x)", chNo, wayNo, phyBlockNo, phyBlockNo);
                         blockChecker[dieNo] = BLOCK_STATE_BAD;
                     }
 
@@ -536,6 +543,7 @@ void FindBadBlock(unsigned char dieState[], unsigned int tempBbtBufAddr[], unsig
                 *bbtUpdater = blockChecker[dieNo];
                 phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].bad = blockChecker[dieNo];
             }
+        }
     }
 }
 
@@ -655,8 +663,8 @@ void SaveBadBlockTable(unsigned char dieState[], unsigned int tempBbtBufAddr[], 
  */
 void RecoverBadBlockTable(unsigned int tempBufAddr)
 {
-    unsigned int dieNo, phyBlockNo, bbtMaker, tempBbtBufBaseAddr, tempBbtBufEntrySize, tempReadBufBaseAddr,
-        tempReadBufEntrySize;
+    unsigned int chNo, wayNo, dieNo, phyBlockNo;
+    unsigned int bbtMaker, tempBbtBufBaseAddr, tempBbtBufEntrySize, tempReadBufBaseAddr, tempReadBufEntrySize;
     unsigned int tempBbtBufAddr[USER_DIES];  // buffer addresses for storing the bbt pages
     unsigned int tempReadBufAddr[USER_DIES]; // buffer addresses for finding bad blocks
     unsigned char dieState[USER_DIES];       // whether the bbt of this die should be rebuilt
@@ -682,6 +690,8 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
     bbtMaker = BAD_BLOCK_TABLE_MAKER_IDLE;
     for (dieNo = 0; dieNo < USER_DIES; dieNo++)
     {
+        chNo            = Vdie2PchTranslation(dieNo);
+        wayNo           = Vdie2PwayTranslation(dieNo);
         bbtTableChecker = (unsigned char *)(tempBbtBufAddr[dieNo]);
 
         /*
@@ -701,8 +711,7 @@ void RecoverBadBlockTable(unsigned int tempBufAddr)
 
                 phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].bad = *bbtTableChecker;
                 if (phyBlockMapPtr->phyBlock[dieNo][phyBlockNo].bad == BLOCK_STATE_BAD)
-                    xil_printf("	bad block: ch %d way %d phyBlock %d  \r\n", Vdie2PchTranslation(dieNo),
-                               Vdie2PwayTranslation(dieNo), phyBlockNo);
+                    pr_info("C/W[%u/%u]: bad block at PBlk %u (0x%x)", chNo, wayNo, phyBlockNo, phyBlockNo);
             }
 
             xil_printf("[ bad blocks of ch %d way %d are checked. ]\r\n", Vdie2PchTranslation(dieNo),
