@@ -57,6 +57,7 @@
 #define PR_RESET "\e[0m"
 #define PR_DEBUG "\e[32;49;1mDEBUG "
 #define PR_INFO  "\e[34;49;1mINFO "
+#define PR_WARN  "\e[33;49;1mWARN "
 #define PR_ERROR "\e[31;49;1mERROR "
 
 /* -------------------------------------------------------------------------- */
@@ -83,6 +84,7 @@
 #define pr_debug(fmt, ...)
 #endif
 #define pr_info(fmt, ...)  pr(PR_INFO PR_RESET fmt, ##__VA_ARGS__)
+#define pr_warn(fmt, ...)  pr(PR_WARN CODE_POS_FMT PR_RESET fmt, CODE_POS_ARGS, ##__VA_ARGS__)
 #define pr_error(fmt, ...) pr(PR_ERROR CODE_POS_FMT PR_RESET fmt, CODE_POS_ARGS, ##__VA_ARGS__)
 
 /* -------------------------------------------------------------------------- */
