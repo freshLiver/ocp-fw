@@ -180,8 +180,8 @@ typedef struct _NVME_DMA_INFO
 {
     unsigned int startIndex : 16;      // which NVMe block should the slice request transfer from/to
     unsigned int nvmeBlockOffset : 16; // which slice request offset should the first NVMe block aligned to
-    unsigned int numOfNvmeBlock : 16;  // how many NVMe blocks should be transferred
-    unsigned int reqTail : 8;          // TODO
+    unsigned int numOfNvmeBlock : 16;  // how many NVMe blocks should be transferred, 1 based
+    unsigned int reqTail : 8;          // the tail index of the NVMe auto DMA queue
     unsigned int reserved0 : 8;        // reserved
     unsigned int overFlowCnt;          // TODO
 } NVME_DMA_INFO, *P_NVME_DMA_INFO;
@@ -258,9 +258,9 @@ typedef struct _SSD_REQ_FORMAT
 
     unsigned int logicalSliceAddr;
 
-    REQ_OPTION reqOpt;         //
+    REQ_OPTION reqOpt;         // optional request configs
     DATA_BUF_INFO dataBufInfo; // request data buffer entry info of this request
-    NVME_DMA_INFO nvmeDmaInfo; //
+    NVME_DMA_INFO nvmeDmaInfo; // NVMe requests related info
     NAND_INFO nandInfo;        // address info of this NAND request
 
     unsigned int prevReq : 16;         // the request pool index of prev request queue entry
