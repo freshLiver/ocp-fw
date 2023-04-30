@@ -39,8 +39,6 @@ void monitor_handle_admin_cmds(uint32_t cmdSlotTag, NVME_ADMIN_COMMAND *nvmeAdmi
         uint32_t iDie      = nvmeAdminCmd->dword11;
         uint32_t iBlk      = nvmeAdminCmd->dword12;
         uint32_t iPage     = nvmeAdminCmd->dword13;
-        uint32_t len       = nvmeAdminCmd->dword14;
-        uint32_t hostAddrH = nvmeAdminCmd->PRP1[1], hostAddrL = nvmeAdminCmd->PRP1[0];
 
         uint32_t iCh = VDIE2PCH(iDie), iWay = VDIE2PWAY(iDie);
 
@@ -52,11 +50,6 @@ void monitor_handle_admin_cmds(uint32_t cmdSlotTag, NVME_ADMIN_COMMAND *nvmeAdmi
         case 2:
             monitor_dump_phy_page(iCh, iWay, iBlk, iPage);
             break;
-        case 3:
-            monitor_nvme_write_slice_buffer(iDie, hostAddrH, hostAddrL, len);
-            monitor_write_phy_page(iCh, iWay, iBlk, iPage);
-            break;
-
         case 4:
             monitor_erase_phy_blk(iCh, iWay, iBlk);
             break;
@@ -91,4 +84,27 @@ void monitor_handle_admin_cmds(uint32_t cmdSlotTag, NVME_ADMIN_COMMAND *nvmeAdmi
     }
     else
         pr_error("Monitor: Unexpected monitor opcode: %u", nvmeAdminCmd->OPC);
+}
+
+void handle_nvme_io_monitor(uint32_t cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd)
+{
+    uint32_t mode = nvmeIOCmd->dword10; // dword10 is used to specify the monitor mode
+    uint32_t iDie;
+
+    if (nvmeIOCmd->OPC == IO_NVM_WRITE_SLICE)
+    {
+        switch (mode)
+        {
+        case 1:
+            iDie = nvmeIOCmd->dword11;
+            monitor_nvme_write_slice_buffer(cmdSlotTag, iDie);
+            break;
+
+        default:
+            pr_error("Monitor: Unexpected WRITE_SLICE mode: %u", mode);
+            break;
+        }
+    }
+    else
+        pr_error("Monitor: Unexpected monitor opcode: %u", nvmeIOCmd->OPC);
 }

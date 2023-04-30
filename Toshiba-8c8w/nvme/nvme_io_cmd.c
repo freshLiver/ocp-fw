@@ -188,6 +188,11 @@ void handle_nvme_io_cmd(NVME_COMMAND *nvmeCmd)
         handle_nvme_io_read(nvmeCmd->cmdSlotTag, nvmeIOCmd);
         break;
     }
+    case IO_NVM_WRITE_SLICE:
+    {
+        handle_nvme_io_monitor(nvmeCmd->cmdSlotTag, nvmeIOCmd);
+        break;
+    }
     default:
     {
         xil_printf("Not Support IO Command OPC: %X\r\n", opc);

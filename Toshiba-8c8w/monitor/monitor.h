@@ -44,9 +44,10 @@ extern MONITOR_DATA_BUFFER *monitorBuffers;
 void monitorInit();
 void monitor_clear_slice_buffer(uint32_t iDie);
 void monitor_dump_slice_buffer(uint32_t iDie);
-void monitor_nvme_write_slice_buffer(uint32_t iDie, uint32_t hostAddrH, uint32_t hostAddrL, uint32_t len);
+void monitor_nvme_write_slice_buffer(uint32_t cmdSlotTag, uint32_t iDie);
 
 void monitor_handle_admin_cmds(uint32_t cmdSlotTag, NVME_ADMIN_COMMAND *nvmeAdminCmd);
+void handle_nvme_io_monitor(uint32_t cmdSlotTag, NVME_IO_COMMAND *nvmeIOCmd);
 
 void monitor_dump_data_buffer_info(MONITOR_MODE mode, uint32_t slsa, uint32_t elsa);
 void monitor_dump_data_buffer_content(uint32_t iBufEntry);

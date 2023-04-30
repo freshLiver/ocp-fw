@@ -4,6 +4,8 @@
 
 MONITOR_DATA_BUFFER *monitorBuffers;
 
+extern void EvictDataBufEntry(unsigned int originReqSlotTag);
+
 /* -------------------------------------------------------------------------- */
 /*                              public interfaces                             */
 /* -------------------------------------------------------------------------- */
@@ -91,31 +93,45 @@ void monitor_dump_slice_buffer(uint32_t iDie)
  *
  * @note Since the slice buffer size is limited, the should not
  *
+ * @param cmdSlotTag The ??? of the source NVMe command.
  * @param iDie The target die number of the slice buffer to store the host data.
- * @param hostAddrH The upper 32 bits of host PCIe buffer address.
- * @param hostAddrL The lower 32 bits of host PCIe buffer address.
- * @param len The length in bytes of the data to be read.
  */
-void monitor_nvme_write_slice_buffer(uint32_t iDie, uint32_t hostAddrH, uint32_t hostAddrL, uint32_t len)
+void monitor_nvme_write_slice_buffer(uint32_t cmdSlotTag, uint32_t iDie)
 {
-    uint32_t lenLimited;
-    uintptr_t buffer;
+    uint32_t iReqEntry = GetFromFreeReqQ();
+    uint32_t iBufEntry = AllocateDataBuf();
+    void *pBufEntry    = (void *)BUF_DATA_ENTRY2ADDR(iBufEntry);
 
-    // limit the max data size to slice buffer size
-    buffer = (uintptr_t)MONITOR_DIE_DATA_BUF(iDie).byte;
-    if (len > BYTES_PER_SLICE)
-    {
-        pr_info("MONITOR: Limit data length %u -> BYTES_PER_SLICE", len);
-        lenLimited = BYTES_PER_SLICE;
-    }
-    else
-        lenLimited = len;
+    // clear data buffer
+    EvictDataBufEntry(iReqEntry);                      // data buffer should be clean after eviction
+    BUF_ENTRY(iBufEntry)->logicalSliceAddr = LSA_NONE; // should not be an useful cache entry
+    PutToDataBufHashList(iBufEntry);
 
-    pr_info("MONITOR: NVMe DMA 0x%X%X -> Slice Buffer[%u]", hostAddrH, hostAddrL, iDie);
-    set_direct_rx_dma(buffer, hostAddrH, hostAddrL, lenLimited);
-    check_direct_rx_dma_done();
+    // create RxDMA request
+    REQ_ENTRY(iReqEntry)->reqType                     = REQ_TYPE_NVME_DMA;
+    REQ_ENTRY(iReqEntry)->reqCode                     = REQ_CODE_RxDMA;
+    REQ_ENTRY(iReqEntry)->nvmeCmdSlotTag              = cmdSlotTag;
+    REQ_ENTRY(iReqEntry)->logicalSliceAddr            = LSA_NONE;               // dummy data, not useful cache
+    REQ_ENTRY(iReqEntry)->reqOpt.dataBufFormat        = REQ_OPT_DATA_BUF_ENTRY; // must use data buffer entry
+    REQ_ENTRY(iReqEntry)->dataBufInfo.entry           = iBufEntry;
+    REQ_ENTRY(iReqEntry)->nvmeDmaInfo.startIndex      = 0;
+    REQ_ENTRY(iReqEntry)->nvmeDmaInfo.nvmeBlockOffset = 0;
+    REQ_ENTRY(iReqEntry)->nvmeDmaInfo.numOfNvmeBlock  = NVME_BLOCKS_PER_SLICE;
+    REQ_ENTRY(iReqEntry)->nandInfo.virtualSliceAddr   = VSA_NONE; // dummy data, don't map to phy page
+
+    // do and wait DMA
+    IssueNvmeDmaReq(iReqEntry); // setup auto dma before being put to req queue
+    PutToNvmeDmaReqQ(iReqEntry);
+    CheckDoneNvmeDmaReq(); // wait all dma
+
+    // copy data to slice buffer
+    memcpy(MONITOR_DIE_DATA_BUF(iDie).data, pBufEntry, BYTES_PER_DATA_REGION_OF_SLICE);
+    memset(MONITOR_DIE_DATA_BUF(iDie).spare, 0, BYTES_PER_SPARE_REGION_OF_SLICE);
 
 #if defined(DEBUG) && (DEBUG > 2)
-    monitor_dump_slice_buffer(iDie);
+    // dump data buffer
+    monitor_dump_data_buffer_content(iBufEntry);
 #endif /* DEBUG */
+
+    monitor_dump_slice_buffer(iDie);
 }

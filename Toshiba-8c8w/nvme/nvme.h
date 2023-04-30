@@ -95,8 +95,9 @@
 
 /* customized io commands (>= 0x90) for monitoring */
 
-#define IO_NVM_WRITE_PHY 0x91
-#define IO_NVM_READ_PHY  0x92
+#define IO_NVM_WRITE_PHY   0x91
+#define IO_NVM_READ_PHY    0x92
+#define IO_NVM_WRITE_SLICE 0x93
 
 /*Status Code Type */
 #define SCT_GENERIC_COMMAND_STATUS          0
