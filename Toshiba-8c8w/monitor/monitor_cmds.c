@@ -2,7 +2,7 @@
 
 #include "monitor/monitor.h"
 
-void monitor_handle_admin_cmds(NVME_ADMIN_COMMAND *nvmeAdminCmd)
+void monitor_handle_admin_cmds(uint32_t cmdSlotTag, NVME_ADMIN_COMMAND *nvmeAdminCmd)
 {
     uint32_t mode = nvmeAdminCmd->dword10; // dword10 is used to specify the monitor mode
 

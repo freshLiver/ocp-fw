@@ -517,7 +517,7 @@ void handle_nvme_admin_cmd(NVME_COMMAND *nvmeCmd)
     case ADMIN_MONITOR_BUFFER:
     case ADMIN_MONITOR_MAPPING:
     {
-        monitor_handle_admin_cmds(nvmeAdminCmd);
+        monitor_handle_admin_cmds(nvmeCmd->cmdSlotTag, nvmeAdminCmd);
 
         needCpl          = 0;
         needSlotRelease  = 0;
