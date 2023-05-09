@@ -69,6 +69,7 @@ P_TEMPORARY_DATA_BUF_MAP tempDataBufMapPtr;
  * - hashNextEntry points to DATA_BUF_NONE, because it doesn't belongs to any bucket yet
  * - dirty flag is not set
  * - blockingReqTail: no blocking request at the beginning, thus points to none
+ * - dontCache: this buffer entry should not be cached (be inserted into hash list)
  *
  * There are `16 x NUM_DIES` entries in the `dataBufHashTable`, and all the elements will
  * be initialized to empty bucket, so:
@@ -99,6 +100,7 @@ void InitDataBuf()
         dataBufMapPtr->dataBuf[bufEntry].nextEntry        = bufEntry + 1;
         dataBufMapPtr->dataBuf[bufEntry].dirty            = DATA_BUF_CLEAN;
         dataBufMapPtr->dataBuf[bufEntry].phyReq           = DATA_BUF_FOR_LOG_REQ;
+        dataBufMapPtr->dataBuf[bufEntry].dontCache        = DATA_BUF_KEEP_CACHE;
         dataBufMapPtr->dataBuf[bufEntry].blockingReqTail  = REQ_SLOT_TAG_NONE;
 
         dataBufHashTablePtr->dataBufHash[bufEntry].headEntry = DATA_BUF_NONE;
@@ -128,7 +130,7 @@ void FlushDataBuf(uint32_t cmdSlotTag)
         bufEntry = BUF_ENTRY(iBufEntry);
 
         // flush buffer entry
-        if (bufEntry->dirty == DATA_BUF_DIRTY)
+        if (bufEntry->dirty == DATA_BUF_DIRTY && bufEntry->dontCache == DATA_BUF_KEEP_CACHE)
         {
             if (bufEntry->phyReq)
             {
@@ -390,11 +392,24 @@ void UpdateTempDataBufEntryInfoBlockingReq(unsigned int bufEntry, unsigned int r
  * `logicalSliceAddr` of the given entry, and modify the tail (head as well, if needed) of
  * target hash table bucket.
  *
+ * @note If the `dontCached` flag of the buffer entry is set to true, this insert process
+ * will be skipped, since the buffer entry should not be inserted into any hash bucket.
+ *
  * @param bufEntry the index of the data buffer entry to be inserted
  */
 void PutToDataBufHashList(unsigned int bufEntry)
 {
     unsigned int hashEntry;
+
+    // this buffer entry may not want to be cached (in hash list)
+    if (BUF_ENTRY(bufEntry)->dontCache == DATA_BUF_SKIP_CACHE)
+    {
+        pr_debug("Buf[%u] should not be cached, skipped", bufEntry);
+        BUF_ENTRY(bufEntry)->hashPrevEntry = DATA_BUF_NONE;
+        BUF_ENTRY(bufEntry)->hashNextEntry = DATA_BUF_NONE;
+        ASSERT(0, "Currently all buffer entries should be cached");
+        return;
+    }
 
     hashEntry = FindDataBufHashTableEntry(dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr);
 
@@ -420,10 +435,23 @@ void PutToDataBufHashList(unsigned int bufEntry)
  * We may need to modify the head/tail index of corresponding bucket specified by the
  * `logicalSliceAddr` of the given data buffer entry.
  *
+ * @note If the `dontCached` flag of the buffer entry is set to true, this remove process
+ * will be skipped, since the buffer entry should not exist in any hash bucket.
+ *
  * @param bufEntry the index of the data buffer entry to be removed
  */
 void SelectiveGetFromDataBufHashList(unsigned int bufEntry)
 {
+    // this buffer entry may not in cache (hash list)
+    if (BUF_ENTRY(bufEntry)->dontCache == DATA_BUF_SKIP_CACHE)
+    {
+        pr_debug("Buf[%u] not cached, skipped", bufEntry);
+        BUF_ENTRY(bufEntry)->hashPrevEntry = DATA_BUF_NONE;
+        BUF_ENTRY(bufEntry)->hashNextEntry = DATA_BUF_NONE;
+        ASSERT(0, "Currently all buffer entries should be cached");
+        return;
+    }
+
     if (dataBufMapPtr->dataBuf[bufEntry].logicalSliceAddr != LSA_NONE)
     {
         unsigned int prevBufEntry, nextBufEntry, hashEntry;

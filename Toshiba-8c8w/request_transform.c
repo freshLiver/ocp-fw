@@ -235,7 +235,8 @@ void EvictDataBufEntry(unsigned int originReqSlotTag)
 
     dataBufEntry = REQ_ENTRY(originReqSlotTag)->dataBufInfo.entry;
 
-    if (BUF_ENTRY(dataBufEntry)->dirty == DATA_BUF_DIRTY)
+    if (BUF_ENTRY(dataBufEntry)->dirty == DATA_BUF_DIRTY &&
+        BUF_ENTRY(dataBufEntry)->dontCache == DATA_BUF_KEEP_CACHE)
     {
         if (BUF_ENTRY(dataBufEntry)->phyReq)
         {
@@ -485,8 +486,9 @@ void ReqTransSliceToLowLevel()
             else
                 BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_LOG_REQ;
 
-            BUF_ENTRY(dataBufEntry)->dirty = DATA_BUF_DIRTY;
-            REQ_ENTRY(reqSlotTag)->reqCode = REQ_CODE_RxDMA;
+            BUF_ENTRY(dataBufEntry)->dirty     = DATA_BUF_DIRTY;
+            BUF_ENTRY(dataBufEntry)->dontCache = DATA_BUF_KEEP_CACHE;
+            REQ_ENTRY(reqSlotTag)->reqCode     = REQ_CODE_RxDMA;
             break;
 
         // send data to host after target page being read
@@ -496,7 +498,9 @@ void ReqTransSliceToLowLevel()
                 BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_PHY_REQ;
             else
                 BUF_ENTRY(dataBufEntry)->phyReq = DATA_BUF_FOR_LOG_REQ;
-            REQ_ENTRY(reqSlotTag)->reqCode = REQ_CODE_TxDMA;
+
+            BUF_ENTRY(dataBufEntry)->dontCache = DATA_BUF_KEEP_CACHE;
+            REQ_ENTRY(reqSlotTag)->reqCode     = REQ_CODE_TxDMA;
             break;
 
         default:

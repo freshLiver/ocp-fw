@@ -48,6 +48,7 @@ void monitor_dump_data_buffer_info(MONITOR_MODE mode, uint32_t slsa, uint32_t el
         pr_info("   .hashNextEntry      = %u", entry->hashNextEntry);
         pr_info("   .blockingReqTail    = %u", entry->blockingReqTail);
         pr_info("   .phyReq             = %u", entry->phyReq);
+        pr_info("   .dontCache          = %u", entry->dontCache);
     }
 }
 
