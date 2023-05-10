@@ -327,7 +327,7 @@ void DataReadFromNand(unsigned int originReqSlotTag)
              * To handle this and similar situations, the fw should just skip to read the
              * target page and return garbage data, instead of stucking here.
              */
-            pr_error("Req[%u]: No mapping info for LSA[%u]!", originReqSlotTag, REQ_LSA(originReqSlotTag));
+            pr_warn("Req[%u]: No mapping info for LSA[%u]!", originReqSlotTag, REQ_LSA(originReqSlotTag));
             return;
         }
 

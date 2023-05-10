@@ -349,7 +349,7 @@ void SchedulingNandReqPerCh(unsigned int chNo)
     }
     else
     {
-        pr_debug("Ch[%u]: No idle way can be used to issue new request ...", chNo);
+        pr_debug("Ch[%u]: There is no way in the status report list...", chNo);
     }
 
     /**

@@ -292,7 +292,7 @@ V2FProgramPageAsync(T4REGS *t4regs, int way, unsigned int rowAddress, void *page
 
 void __attribute__((optimize("O0"))) V2FEraseBlockAsync(T4REGS *t4regs, int way, unsigned int rowAddress)
 {
-    pr_error("ChReg 0x%p Way %u Row %u", t4regs, way, rowAddress);
+    pr_warn("ChReg 0x%p Way %u Row %u", t4regs, way, rowAddress);
     T4REG_CMD_ERASE_BLOCK eraseBlockCmd;
 
     assert((rowAddress & 0xFF) == 0);
