@@ -347,6 +347,10 @@ void SchedulingNandReqPerCh(unsigned int chNo)
             }
         }
     }
+    else
+    {
+        pr_debug("Ch[%u]: No idle way can be used to issue new request ...", chNo);
+    }
 
     /**
      * In the last part, we now can try to issue the requests based on the priority of
@@ -1421,18 +1425,18 @@ void ExecuteNandReq(unsigned int chNo, unsigned int wayNo, unsigned int reqStatu
                 }
 
             if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ)
-                xil_printf("Read Trigger FAIL on      ");
+                pr_warn("Read Trigger FAIL on      ");
             else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_READ_TRANSFER)
-                xil_printf("Read Transfer FAIL on     ");
+                pr_warn("Read Transfer FAIL on     ");
             else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_WRITE)
-                xil_printf("Write FAIL on             ");
+                pr_warn("Write FAIL on             ");
             else if (reqPoolPtr->reqPool[reqSlotTag].reqCode == REQ_CODE_ERASE)
-                xil_printf("Erase FAIL on             ");
+                pr_warn("Erase FAIL on             ");
 
             rowAddr = GenerateNandRowAddr(reqSlotTag);
-            pr_error("ch %x way %x rowAddr 0x%x: completeFlag 0x%x statusReport 0x%x", chNo, wayNo, rowAddr,
-                     completeFlagTablePtr->completeFlag[chNo][wayNo],
-                     statusReportTablePtr->statusReport[chNo][wayNo]);
+            pr_warn("ch %x way %x rowAddr 0x%x: completeFlag 0x%x statusReport 0x%x", chNo, wayNo, rowAddr,
+                    completeFlagTablePtr->completeFlag[chNo][wayNo],
+                    statusReportTablePtr->statusReport[chNo][wayNo]);
 
             if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.nandEcc == REQ_OPT_NAND_ECC_OFF)
                 if (reqPoolPtr->reqPool[reqSlotTag].reqOpt.dataBufFormat == REQ_OPT_DATA_BUF_ADDR)
