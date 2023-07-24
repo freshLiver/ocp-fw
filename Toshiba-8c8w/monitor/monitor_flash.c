@@ -21,7 +21,7 @@ void monitor_dump_free_blocks(uint32_t iDie)
 }
 
 /**
- * @brief Read the data of the specified page into the slice buffer of the same die.
+ * @brief Read and dump the specified physical page.
  *
  * @note The data read from the flash memory will be buffered to the slice buffer of the
  * same die where the data is originally stored.

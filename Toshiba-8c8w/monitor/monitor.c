@@ -10,15 +10,22 @@ extern void EvictDataBufEntry(unsigned int originReqSlotTag);
 /*                              public interfaces                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * @brief Check and initialize the data structures needed by the monitor module.
+ *
+ * @bug If the slice buffers are placed after `RESERVED1_START_ADDR`, incorrect data will
+ * be returned.
+ */
 void monitorInit()
 {
     // check memory size and range
-    STATIC_ASSERT(MONITOR_END_ADDR < RESERVED1_END_ADDR);
+    STATIC_ASSERT(MONITOR_END_ADDR < COMPLETE_FLAG_TABLE_ADDR);
     STATIC_ASSERT(sizeof(MONITOR_SLICE_BUFFER) == BYTES_PER_SLICE);
     STATIC_ASSERT(sizeof(MONITOR_DATA_BUFFER) == (USER_DIES * BYTES_PER_SLICE));
 
     // initialize
     monitorBuffers = (MONITOR_DATA_BUFFER *)MONITOR_DATA_BUFFER_ADDR;
+    // monitorBuffers = (MONITOR_DATA_BUFFER *)RESERVED_DATA_BUFFER_BASE_ADDR;
 
     pr_info("MONITOR: Initializing Monitor Data Buffers...");
     for (uint8_t iDie = 0; iDie < USER_DIES; ++iDie)

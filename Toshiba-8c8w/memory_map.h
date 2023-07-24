@@ -87,6 +87,13 @@
 #define RESERVED_DATA_BUFFER_BASE_ADDR                                                                            \
     (TEMPORARY_SPARE_DATA_BUFFER_BASE_ADDR +                                                                      \
      AVAILABLE_TEMPORARY_DATA_BUFFER_ENTRY_COUNT * BYTES_PER_SPARE_REGION_OF_SLICE)
+
+// dedicated buffers for monitoring
+#define MONITOR_START_ADDR           (RESERVED_DATA_BUFFER_BASE_ADDR + 0x00200000)
+#define MONITOR_DATA_BUFFER_ADDR     (MONITOR_START_ADDR)
+#define MONITOR_DATA_BUFFER_END_ADDR (MONITOR_DATA_BUFFER_ADDR + sizeof(MONITOR_DATA_BUFFER))
+#define MONITOR_END_ADDR             (MONITOR_DATA_BUFFER_END_ADDR)
+
 // for nand request completion
 #define COMPLETE_FLAG_TABLE_ADDR 0x17000000
 #define STATUS_REPORT_TABLE_ADDR (COMPLETE_FLAG_TABLE_ADDR + sizeof(COMPLETE_FLAG_TABLE))
@@ -123,11 +130,6 @@
 /* -------------------------------------------------------------------------- */
 /*                         allocate space for monitor                         */
 /* -------------------------------------------------------------------------- */
-
-#define MONITOR_START_ADDR           (RESERVED1_START_ADDR)
-#define MONITOR_DATA_BUFFER_ADDR     (MONITOR_START_ADDR)
-#define MONITOR_DATA_BUFFER_END_ADDR (MONITOR_DATA_BUFFER_ADDR + sizeof(MONITOR_DATA_BUFFER))
-#define MONITOR_END_ADDR             (MONITOR_DATA_BUFFER_END_ADDR)
 
 #define RESERVED1_END_ADDR 0x3FFFFFFF
 

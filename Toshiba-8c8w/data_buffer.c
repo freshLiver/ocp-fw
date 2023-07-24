@@ -48,6 +48,7 @@
 #include "debug.h"
 
 #include "memory_map.h"
+#include "data_buffer.h"
 
 P_DATA_BUF_MAP dataBufMapPtr;
 DATA_BUF_LRU_LIST dataBufLruList;
